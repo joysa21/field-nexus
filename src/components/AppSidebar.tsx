@@ -1,0 +1,99 @@
+import { NavLink } from "@/components/NavLink";
+import { useLocation } from "react-router-dom";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  LayoutDashboard,
+  Play,
+  ListChecks,
+  Users,
+  FileText,
+  Terminal,
+  Zap,
+} from "lucide-react";
+
+const navItems = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Run Agents", url: "/run", icon: Play, accent: true },
+  { title: "Issues", url: "/issues", icon: ListChecks },
+  { title: "Volunteers", url: "/volunteers", icon: Users },
+  { title: "Action Plan", url: "/action-plan", icon: FileText },
+  { title: "Agent Logs", url: "/logs", icon: Terminal },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const location = useLocation();
+
+  return (
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarHeader className="px-4 py-5">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center flex-shrink-0">
+            <Zap className="w-4 h-4 text-primary-foreground" />
+          </div>
+          {!collapsed && (
+            <div>
+              <h1 className="text-sidebar-primary font-bold text-base leading-tight">ImpactMapper</h1>
+              <p className="text-sidebar-foreground/40 text-[10px] leading-tight">Agentic NGO coordination</p>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => {
+                const isActive = item.url === "/"
+                  ? location.pathname === "/"
+                  : location.pathname.startsWith(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/"}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+                          item.accent && !isActive
+                            ? "text-sidebar-primary hover:bg-sidebar-accent"
+                            : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        }`}
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      >
+                        <item.icon
+                          className={`w-4 h-4 flex-shrink-0 ${item.accent && !isActive ? "text-sidebar-primary" : ""}`}
+                        />
+                        {!collapsed && <span className="text-sm">{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="px-4 py-3">
+        {!collapsed && (
+          <p className="text-sidebar-foreground/30 text-[10px]">
+            v0.1.0 — stub agents
+          </p>
+        )}
+      </SidebarFooter>
+    </Sidebar>
+  );
+}

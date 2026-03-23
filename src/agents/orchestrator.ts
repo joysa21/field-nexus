@@ -4,6 +4,8 @@ export interface AgentLog {
   decision: string;
   reasoning: string;
 }
+// check
+
 
 export interface Alert {
   type: 'skill_gap' | 'overload' | 'critical_unassigned' | 'reallocation';

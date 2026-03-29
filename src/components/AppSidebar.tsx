@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +13,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
   Play,
@@ -20,6 +22,8 @@ import {
   FileText,
   Terminal,
   Zap,
+  LogOut,
+  User,
 } from "lucide-react";
 
 const navItems = [
@@ -35,6 +39,13 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/auth");
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -87,7 +98,41 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-4 py-3">
+      <SidebarFooter className="flex flex-col gap-2 px-4 py-3">
+        {user && !collapsed && (
+          <div className="flex items-center gap-2 px-2 py-2 rounded-md bg-sidebar-accent/50">
+            <User className="w-4 h-4 text-sidebar-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-sidebar-primary truncate">{user.email}</p>
+              <p className="text-[9px] text-sidebar-foreground/60 capitalize">{user.userType}</p>
+            </div>
+          </div>
+        )}
+        
+        {!collapsed && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="w-full justify-start text-xs"
+          >
+            <LogOut className="w-3 h-3 mr-2" />
+            Logout
+          </Button>
+        )}
+        
+        {collapsed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="w-full"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        )}
+        
         {!collapsed && (
           <p className="text-sidebar-foreground/30 text-[10px]">
             v0.1.0 — stub agents

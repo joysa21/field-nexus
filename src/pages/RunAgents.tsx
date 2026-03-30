@@ -69,15 +69,17 @@ export default function RunAgents() {
       );
 
       // Save to Supabase
-      await supabase.from("agent_runs").insert({
+      const { error: runErr } = await supabase.from("agent_runs").insert({
         total_issues: finalState.issues.length,
         total_assigned: finalState.assignments.length,
         alerts: finalState.alerts as any,
         agent_logs: finalState.agentLogs as any,
       });
+      if (runErr) throw runErr;
 
       if (finalState.issues.length > 0) {
-        await supabase.from("issues").insert(finalState.issues);
+        const { error: issuesErr } = await supabase.from("issues").insert(finalState.issues);
+        if (issuesErr) throw issuesErr;
       }
 
       toast.success(`Pipeline complete — ${finalState.issues.length} issues processed`);

@@ -21,6 +21,7 @@ interface Issue {
   status: string | null;
   assigned_volunteer_id: string | null;
   assignment_reason: string | null;
+  created_at?: string | null;
 }
 
 interface Volunteer {
@@ -142,7 +143,7 @@ export default function Issues() {
     .filter((i) => statusFilter === "all" || i.status === statusFilter)
     .sort((a, b) => {
       if (sortBy === "priority") return (b.priority_score || 0) - (a.priority_score || 0);
-      return new Date(b.id).getTime() - new Date(a.id).getTime();
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
 
   const getVolunteerName = (id: string | null) =>

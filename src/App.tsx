@@ -13,6 +13,14 @@ import Issues from "./pages/Issues";
 import Volunteers from "./pages/Volunteers";
 import ActionPlan from "./pages/ActionPlan";
 import AgentLogs from "./pages/AgentLogs";
+import Community from "./pages/Community";
+import Connections from "./pages/Connections";
+import NgoDirectory from "./pages/NgoDirectory";
+import VolunteerDirectory from "./pages/VolunteerDirectory";
+import Profile from "./pages/Profile";
+import Saved from "./pages/Saved";
+import Notifications from "./pages/Notifications";
+import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +42,15 @@ const App = () => (
               }
             >
               <Route path="/" element={<Dashboard />} />
+              <Route path="/community" element={<Community />} />
+              <Route path="/community/:type/:id" element={<PostDetail />} />
+              <Route path="/connections" element={<Connections />} />
+              <Route path="/directory/ngos" element={<NgoDirectory />} />
+              <Route path="/directory/volunteers" element={<VolunteerDirectory />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/:userId" element={<Profile />} />
+              <Route path="/saved" element={<Saved />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/run" element={<RunAgents />} />
               <Route path="/issues" element={<Issues />} />
               <Route path="/volunteers" element={<Volunteers />} />

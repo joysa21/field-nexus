@@ -2,7 +2,7 @@ import type { UserRole } from "@/types/impact";
 import type { VolunteerDomain } from "@/lib/volunteerDomains";
 import { VOLUNTEER_DOMAINS } from "@/lib/volunteerDomains";
 
-const MOCK_AUTH_STORAGE_KEY = "impactmapper.mock.session";
+const MOCK_AUTH_STORAGE_KEY = "sahayak.mock.session";
 
 export interface MockSession {
   id: string;

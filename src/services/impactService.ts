@@ -90,6 +90,81 @@ const MOCK_NGO_DIRECTORY = [
       contact_info: "volunteer@learnforward.org",
     },
   },
+  {
+    id: "ngo-6",
+    role: "ngo" as const,
+    display_name: "WaterBridge Alliance",
+    location: "Lucknow",
+    contact_info: "help@waterbridge.org",
+    verification_status: "verified" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      description: "Restores village handpumps and runs water-safety awareness camps.",
+      sector: "Water Access",
+      contact_info: "help@waterbridge.org",
+    },
+  },
+  {
+    id: "ngo-7",
+    role: "ngo" as const,
+    display_name: "GreenStep Mission",
+    location: "Chennai",
+    contact_info: "action@greenstep.org",
+    verification_status: "verified" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      description: "Coordinates mangrove restoration and urban clean-up drives.",
+      sector: "Environment",
+      contact_info: "action@greenstep.org",
+    },
+  },
+  {
+    id: "ngo-8",
+    role: "ngo" as const,
+    display_name: "SafeHome Collective",
+    location: "Jaipur",
+    contact_info: "support@safehome.org",
+    verification_status: "pending" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      description: "Supports women and families with legal aid and safe shelter referrals.",
+      sector: "Women Support",
+      contact_info: "support@safehome.org",
+    },
+  },
+  {
+    id: "ngo-9",
+    role: "ngo" as const,
+    display_name: "SkillLift Foundation",
+    location: "Kolkata",
+    contact_info: "team@skilllift.org",
+    verification_status: "verified" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      description: "Runs employability, mentoring, and apprenticeship programs for youth.",
+      sector: "Livelihood",
+      contact_info: "team@skilllift.org",
+    },
+  },
+  {
+    id: "ngo-10",
+    role: "ngo" as const,
+    display_name: "CareNet Relief",
+    location: "Bhopal",
+    contact_info: "response@carenetrelief.org",
+    verification_status: "verified" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      description: "Provides emergency ration and medicine support in crisis-hit neighborhoods.",
+      sector: "Emergency Relief",
+      contact_info: "response@carenetrelief.org",
+    },
+  },
 ];
 
 const MOCK_VOLUNTEER_DIRECTORY = [
@@ -123,7 +198,112 @@ const MOCK_VOLUNTEER_DIRECTORY = [
       availability: "Evenings",
     },
   },
+  {
+    id: "vol-3",
+    role: "individual" as const,
+    display_name: "Meera Iyer",
+    location: "Bengaluru",
+    contact_info: "meera@example.org",
+    verification_status: "verified" as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    details: {
+      skills: ["community outreach", "content creation"],
+      interests: ["Women Support", "Education Support"],
+      availability: "Hybrid - 10 hrs/week",
+    },
+  },
 ];
+
+const MOCK_NGO_REQUESTS = MOCK_NGO_DIRECTORY.map((ngo, idx) => ({
+  id: `mock-req-${idx + 1}`,
+  owner_id: ngo.id,
+  title: `${ngo.display_name} needs volunteers`,
+  description: `${ngo.details.description} Looking for committed volunteers to support current field activities this month.`,
+  category: ngo.details.sector,
+  urgency: idx % 4 === 0 ? "high" : idx % 3 === 0 ? "critical" : "medium",
+  location: ngo.location || "Not specified",
+  status: "open",
+  created_at: new Date(Date.now() - idx * 3600_000).toISOString(),
+}));
+
+const MOCK_VOLUNTEER_OFFERS = [
+  {
+    id: "mock-offer-1",
+    owner_id: "vol-1",
+    title: "Healthcare camp support volunteer",
+    description: "Can assist with patient registration, elder support, and awareness drives on weekends.",
+    preferred_causes: ["Healthcare Outreach", "Old Age Support"],
+    urgency: "normal",
+    location: "Delhi",
+    status: "available",
+    created_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+  },
+  {
+    id: "mock-offer-2",
+    owner_id: "vol-2",
+    title: "After-school teaching volunteer",
+    description: "Can mentor students in math and science and coordinate small learning events.",
+    preferred_causes: ["Children Welfare", "Education Support"],
+    urgency: "normal",
+    location: "Mumbai",
+    status: "available",
+    created_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
+  },
+  {
+    id: "mock-offer-3",
+    owner_id: "vol-3",
+    title: "Outreach and communication volunteer",
+    description: "Can help NGOs with campaign messaging, volunteer onboarding, and community updates.",
+    preferred_causes: ["Women Support", "Livelihood"],
+    urgency: "normal",
+    location: "Bengaluru",
+    status: "available",
+    created_at: new Date(Date.now() - 4 * 3600_000).toISOString(),
+  },
+];
+
+const buildMockCommunityFeed = (): CommunityPost[] => {
+  const requestPosts: CommunityPost[] = MOCK_NGO_REQUESTS.map((request) => {
+    const owner = MOCK_NGO_DIRECTORY.find((ngo) => ngo.id === request.owner_id);
+    return {
+      id: request.id,
+      postType: "ngo_request",
+      ownerId: request.owner_id,
+      title: request.title,
+      description: request.description,
+      category: request.category,
+      urgency: request.urgency,
+      location: request.location,
+      status: request.status,
+      createdAt: request.created_at,
+      ownerName: owner?.display_name || "Unknown NGO",
+      ownerRole: "ngo",
+    };
+  });
+
+  const offerPosts: CommunityPost[] = MOCK_VOLUNTEER_OFFERS.map((offer) => {
+    const owner = MOCK_VOLUNTEER_DIRECTORY.find((volunteer) => volunteer.id === offer.owner_id);
+    return {
+      id: offer.id,
+      postType: "volunteer_offer",
+      ownerId: offer.owner_id,
+      title: offer.title,
+      description: offer.description,
+      category: offer.preferred_causes[0] || "General",
+      urgency: offer.urgency,
+      location: offer.location,
+      status: offer.status,
+      createdAt: offer.created_at,
+      ownerName: owner?.display_name || "Volunteer",
+      ownerRole: "individual",
+    };
+  });
+
+  return [...requestPosts, ...offerPosts].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+};
 
 const splitList = (value: string): string[] =>
   value
@@ -262,6 +442,10 @@ export async function ensureProfileForCurrentUser(role: UserRole, displayName: s
 }
 
 export async function getCommunityFeed() {
+  if (isMockAuthEnabled()) {
+    return buildMockCommunityFeed();
+  }
+
   const [ownerMap, requestsResult, offersResult] = await Promise.all([
     buildOwnerMap(),
     supabase
@@ -448,6 +632,26 @@ export async function getConnectionsForMe() {
   const user = await getCurrentSessionUser();
   if (!user) return [] as ConnectionResponse[];
 
+  if (isMockAuthEnabled()) {
+    const session = getMockSession();
+    const now = new Date();
+    const targetNgoIds = MOCK_NGO_DIRECTORY.slice(0, 3).map((ngo) => ngo.id);
+
+    return targetNgoIds.map((ngoId, idx) => ({
+      id: `mock-conn-${idx + 1}`,
+      request_id: `mock-req-${idx + 1}`,
+      offer_id: null,
+      sender_id: session?.role === "ngo" ? ngoId : user.id,
+      receiver_id: session?.role === "ngo" ? user.id : ngoId,
+      message: session?.role === "ngo"
+        ? `Thanks for helping ${MOCK_NGO_DIRECTORY[idx].display_name}. Follow-up impact report shared.`
+        : `I supported ${MOCK_NGO_DIRECTORY[idx].display_name} on ground operations and volunteer coordination.`,
+      status: "completed",
+      created_at: new Date(now.getTime() - (idx + 4) * 86_400_000).toISOString(),
+      updated_at: new Date(now.getTime() - idx * 43_200_000).toISOString(),
+    })) as ConnectionResponse[];
+  }
+
   const { data, error } = await supabase
     .from("connections_or_responses")
     .select("*")
@@ -468,6 +672,38 @@ export async function updateConnectionStatus(id: string, status: ConnectionRespo
 }
 
 export async function getComments(postType: CommunityPostType, postId: string) {
+  if (isMockAuthEnabled()) {
+    const baseComments = [
+      {
+        id: `${postId}-comment-1`,
+        content: "We can mobilize 4 volunteers this weekend.",
+        created_at: new Date(Date.now() - 90 * 60_000).toISOString(),
+        author_id: "vol-1",
+      },
+      {
+        id: `${postId}-comment-2`,
+        content: "Please share shift timings and exact location.",
+        created_at: new Date(Date.now() - 70 * 60_000).toISOString(),
+        author_id: "vol-2",
+      },
+      {
+        id: `${postId}-comment-3`,
+        content: "Our team can help with outreach and beneficiary registration.",
+        created_at: new Date(Date.now() - 40 * 60_000).toISOString(),
+        author_id: "vol-3",
+      },
+    ];
+
+    return baseComments.map((comment) => ({
+      ...comment,
+      post_type: postType,
+      request_id: postType === "ngo_request" ? postId : null,
+      offer_id: postType === "volunteer_offer" ? postId : null,
+      author_name: MOCK_VOLUNTEER_DIRECTORY.find((volunteer) => volunteer.id === comment.author_id)?.display_name || "Volunteer",
+      author_role: "individual",
+    }));
+  }
+
   const query = supabase
     .from("post_comments")
     .select("*")
@@ -533,6 +769,11 @@ export async function unsavePost(postType: CommunityPostType, postId: string) {
 }
 
 export async function getSavedPosts() {
+  if (isMockAuthEnabled()) {
+    const feed = await getCommunityFeed();
+    return feed.slice(0, 3);
+  }
+
   const user = await getCurrentSessionUser();
   if (!user) return [] as CommunityPost[];
 
@@ -553,6 +794,56 @@ export async function getSavedPosts() {
 }
 
 export async function getNotifications() {
+  if (isMockAuthEnabled()) {
+    const user = await getCurrentSessionUser();
+    const mockUserId = user?.id || "mock-user";
+    const now = new Date();
+    return [
+      {
+        id: "mock-notif-1",
+        user_id: mockUserId,
+        actor_id: "ngo-1",
+        event_type: "connection_completed",
+        title: "Connection completed",
+        body: "You successfully helped SilverCare Foundation. Impact note added to your history.",
+        is_read: false,
+        related_request_id: "mock-req-1",
+        related_offer_id: null,
+        related_connection_id: "mock-conn-1",
+        related_comment_id: null,
+        created_at: new Date(now.getTime() - 2 * 3600_000).toISOString(),
+      },
+      {
+        id: "mock-notif-2",
+        user_id: mockUserId,
+        actor_id: "ngo-4",
+        event_type: "new_ngo_request",
+        title: "New NGO request near you",
+        body: "HealthReach Network posted an urgent request in your area.",
+        is_read: false,
+        related_request_id: "mock-req-4",
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        created_at: new Date(now.getTime() - 6 * 3600_000).toISOString(),
+      },
+      {
+        id: "mock-notif-3",
+        user_id: mockUserId,
+        actor_id: null,
+        event_type: "profile_tip",
+        title: "Profile boost tip",
+        body: "Add one more skill to match with 2 new NGO opportunities.",
+        is_read: true,
+        related_request_id: null,
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        created_at: new Date(now.getTime() - 24 * 3600_000).toISOString(),
+      },
+    ] as NotificationItem[];
+  }
+
   const user = await getCurrentSessionUser();
   if (!user) return [] as NotificationItem[];
 
@@ -568,6 +859,10 @@ export async function getNotifications() {
 }
 
 export async function markNotificationRead(id: string) {
+  if (isMockAuthEnabled()) {
+    return;
+  }
+
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
@@ -664,8 +959,18 @@ export async function getProfileByUserId(userId: string) {
               contact_info: session.email,
             }
           : null,
-        requests: [],
-        offers: [],
+        requests: MOCK_NGO_REQUESTS.slice(0, 3).map((request) => ({
+          id: request.id,
+          title: request.title,
+          status: request.status,
+          category: request.category,
+        })),
+        offers: MOCK_VOLUNTEER_OFFERS.slice(0, 3).map((offer) => ({
+          id: offer.id,
+          title: offer.title,
+          status: offer.status,
+          mode: "hybrid",
+        })),
       };
     }
 
@@ -683,14 +988,19 @@ export async function getProfileByUserId(userId: string) {
         },
         individualProfile: null,
         requests: [
-          {
-            id: `req-${ngo.id}`,
-            title: `${ngo.details.sector} volunteer drive`,
-            status: "open",
-            category: ngo.details.sector,
-          },
+          ...MOCK_NGO_REQUESTS.filter((request) => request.owner_id === ngo.id).slice(0, 3).map((request) => ({
+            id: request.id,
+            title: request.title,
+            status: request.status,
+            category: request.category,
+          })),
         ],
-        offers: [],
+        offers: MOCK_VOLUNTEER_OFFERS.slice(0, 3).map((offer) => ({
+          id: offer.id,
+          title: offer.title,
+          status: offer.status,
+          mode: "hybrid",
+        })),
       };
     }
   }
@@ -777,6 +1087,17 @@ export async function updateIndividualProfile(userId: string, patch: {
 export async function getRecommendations() {
   const user = await getCurrentSessionUser();
   if (!user) return [] as CommunityPost[];
+
+  if (isMockAuthEnabled()) {
+    const session = getMockSession();
+    const feed = await getCommunityFeed();
+
+    if (session?.role === "ngo") {
+      return feed.filter((post) => post.postType === "volunteer_offer").slice(0, 3);
+    }
+
+    return feed.filter((post) => post.postType === "ngo_request").slice(0, 6);
+  }
 
   const [profileResult, individualResult, ngoResult, feed] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),

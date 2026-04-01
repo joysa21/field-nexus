@@ -15,22 +15,16 @@ import {
 import { AlertTriangle, Users, ListChecks, Unlink } from "lucide-react";
 
 const DEMO_VOLUNTEERS = [
-  { name: "Aisha Patel", email: "aisha@ngo.org", zone: "North", skills: ["healthcare", "counseling"], availability_hours_per_week: 20 },
-  { name: "Carlos Rivera", email: "carlos@ngo.org", zone: "South", skills: ["water", "sanitation", "logistics"], availability_hours_per_week: 15 },
-  { name: "Priya Nair", email: "priya@ngo.org", zone: "East", skills: ["education", "food"], availability_hours_per_week: 10 },
-  { name: "James Osei", email: "james@ngo.org", zone: "West", skills: ["electricity", "shelter", "safety"], availability_hours_per_week: 25 },
-  { name: "Fatima Al-Hassan", email: "fatima@ngo.org", zone: "Central", skills: ["healthcare", "food", "logistics"], availability_hours_per_week: 18 },
+  { name: "Anita Sharma", email: "anita@example.org", zone: "Delhi", skills: ["counseling", "healthcare"], availability_hours_per_week: 8, is_active: true },
+  { name: "Rohan Mehta", email: "rohan@example.org", zone: "Mumbai", skills: ["education", "logistics"], availability_hours_per_week: 12, is_active: true },
+  { name: "Meera Iyer", email: "meera@example.org", zone: "Bengaluru", skills: ["community outreach", "content creation"], availability_hours_per_week: 10, is_active: true },
 ];
 
 const DEMO_ISSUES = [
-  { issue_summary: "Village of Rampur has had no clean water for 6 days, affecting ~200 families.", sector: "water", location: "Rampur", affected_count: 200, priority_score: 9.2, urgency_score: 9.5, status: "unassigned" },
-  { issue_summary: "Local health clinic in Meerut is out of essential medicines.", sector: "healthcare", location: "Meerut", affected_count: 500, priority_score: 8.7, urgency_score: 9.0, status: "unassigned" },
-  { issue_summary: "Power outage in Sundarbans affecting cold storage for food supplies.", sector: "electricity", location: "Sundarbans", affected_count: 300, priority_score: 7.5, urgency_score: 7.8, status: "unassigned" },
-  { issue_summary: "Open sewage near primary school causing disease risk.", sector: "sanitation", location: "Kharagpur", affected_count: 150, priority_score: 8.1, urgency_score: 8.3, status: "unassigned" },
-  { issue_summary: "40 families displaced after flooding, need temporary shelter.", sector: "shelter", location: "Dibrugarh", affected_count: 40, priority_score: 9.0, urgency_score: 9.2, status: "unassigned" },
-  { issue_summary: "School children without meals for 3 days after supply chain disruption.", sector: "food", location: "Guwahati", affected_count: 600, priority_score: 7.3, urgency_score: 7.5, status: "unassigned" },
-  { issue_summary: "Trauma counseling needed after landslide in hill district.", sector: "healthcare", location: "Darjeeling", affected_count: 80, priority_score: 6.8, urgency_score: 7.0, status: "unassigned" },
-  { issue_summary: "Rural school destroyed, 120 children without education access.", sector: "education", location: "Bankura", affected_count: 120, priority_score: 5.5, urgency_score: 5.0, status: "unassigned" },
+  { issue_summary: "Drinking water shortage in Rampur for 5 days. Immediate tanker support needed.", sector: "water", location: "Rampur", affected_count: 220, priority_score: 9.1, urgency_score: 9.3, status: "unassigned" },
+  { issue_summary: "Primary health center in Meerut is low on antibiotics and first-aid supplies.", sector: "healthcare", location: "Meerut", affected_count: 480, priority_score: 8.4, urgency_score: 8.8, status: "assigned" },
+  { issue_summary: "Flood-affected families in Dibrugarh need temporary shelter kits and dry food.", sector: "shelter", location: "Dibrugarh", affected_count: 75, priority_score: 8.9, urgency_score: 9.1, status: "unassigned" },
+  { issue_summary: "School sanitation units in Kharagpur are damaged and require urgent repairs.", sector: "sanitation", location: "Kharagpur", affected_count: 160, priority_score: 7.2, urgency_score: 7.8, status: "resolved" },
 ];
 
 interface Stats {
@@ -58,8 +52,20 @@ export default function Dashboard() {
       supabase.from("volunteers").select("is_active"),
     ]);
 
-    const issues = issuesRes.data || [];
-    const volunteers = volunteersRes.data || [];
+    const dbIssues = issuesRes.data || [];
+    const dbVolunteers = volunteersRes.data || [];
+
+    const issues = dbIssues.length > 0
+      ? dbIssues
+      : DEMO_ISSUES.map((issue) => ({
+          priority_score: issue.priority_score,
+          status: issue.status,
+          sector: issue.sector,
+        }));
+
+    const volunteers = dbVolunteers.length > 0
+      ? dbVolunteers
+      : DEMO_VOLUNTEERS.map((volunteer) => ({ is_active: volunteer.is_active }));
 
     const sectorMap: Record<string, number> = {};
     issues.forEach((i) => {
@@ -87,7 +93,7 @@ export default function Dashboard() {
       if (vErr) throw vErr;
       const { error: iErr } = await supabase.from("issues").insert(DEMO_ISSUES);
       if (iErr) throw iErr;
-      toast.success("Demo data loaded — 5 volunteers & 8 issues added!");
+      toast.success("Demo data loaded — 3 volunteers & 4 issues added!");
       await fetchStats();
     } catch (e: any) {
       toast.error("Failed to load demo data: " + e.message);

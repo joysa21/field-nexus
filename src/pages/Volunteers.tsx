@@ -50,6 +50,39 @@ const DEMO_VOLUNTEERS = [
   { name: "Fatima Al-Hassan", email: "fatima@ngo.org", zone: "Central", skills: ["healthcare", "food", "logistics"], availability_hours_per_week: 18 },
 ];
 
+const DIRECTORY_VOLUNTEER_FALLBACK: Volunteer[] = [
+  {
+    id: "fallback-vol-1",
+    name: "Anita Sharma",
+    email: "anita@example.org",
+    phone: "+91 98765 12345",
+    skills: ["counseling", "healthcare"],
+    zone: "Delhi",
+    availability_hours_per_week: 8,
+    is_active: true,
+  },
+  {
+    id: "fallback-vol-2",
+    name: "Rohan Mehta",
+    email: "rohan@example.org",
+    phone: "+91 91234 56789",
+    skills: ["education", "logistics"],
+    zone: "Mumbai",
+    availability_hours_per_week: 12,
+    is_active: true,
+  },
+  {
+    id: "fallback-vol-3",
+    name: "Meera Iyer",
+    email: "meera@example.org",
+    phone: "+91 90011 22334",
+    skills: ["community outreach", "content creation"],
+    zone: "Bengaluru",
+    availability_hours_per_week: 10,
+    is_active: true,
+  },
+];
+
 const defaultForm = { name: "", email: "", phone: "", zone: "", availability_hours_per_week: 10, skills: [] as string[], is_active: true };
 
 export default function Volunteers() {
@@ -67,7 +100,8 @@ export default function Volunteers() {
       supabase.from("volunteers").select("*").order("created_at", { ascending: false }),
       supabase.from("issues").select("assigned_volunteer_id").not("assigned_volunteer_id", "is", null),
     ]);
-    setVolunteers(volRes.data || []);
+    const fetched = (volRes.data || []) as Volunteer[];
+    setVolunteers(fetched.length > 0 ? fetched : DIRECTORY_VOLUNTEER_FALLBACK);
     const counts: Record<string, number> = {};
     (issuesRes.data || []).forEach((i) => {
       if (i.assigned_volunteer_id) counts[i.assigned_volunteer_id] = (counts[i.assigned_volunteer_id] || 0) + 1;

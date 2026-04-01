@@ -90,10 +90,10 @@ export function PostCard({
             <Bookmark className="h-4 w-4 mr-1" />
             {isSaved ? "Saved" : "Save"}
           </Button>
-          {canRespond && (
+          {(post.postType === "ngo_request" ? !isOwner : canRespond) && (
             <Button size="sm" onClick={() => onRespond?.(post)}>
               <Handshake className="h-4 w-4 mr-1" />
-              {post.postType === "ngo_request" ? "Offer Help" : "Connect"}
+              {post.postType === "ngo_request" ? "Help this NGO" : "Connect"}
             </Button>
           )}
         </div>

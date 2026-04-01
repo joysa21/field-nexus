@@ -19,11 +19,8 @@ import {
   Play,
   ListChecks,
   Users,
-  Building2,
   Bell,
   Bookmark,
-  Network,
-  UserCircle2,
   MessageSquare,
   FileText,
   Terminal,
@@ -34,14 +31,10 @@ import {
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Community", url: "/community", icon: MessageSquare },
-  { title: "Connections", url: "/connections", icon: Network },
-  { title: "NGO Directory", url: "/directory/ngos", icon: Building2 },
-  { title: "Volunteer Directory", url: "/directory/volunteers", icon: Users },
+  { title: "Run Agents", url: "/run", icon: Play, accent: true },
+  { title: "Community Connections", url: "/community", icon: MessageSquare },
   { title: "Saved", url: "/saved", icon: Bookmark },
   { title: "Notifications", url: "/notifications", icon: Bell },
-  { title: "My Profile", url: "/profile", icon: UserCircle2 },
-  { title: "Run Agents", url: "/run", icon: Play, accent: true },
   { title: "Issues", url: "/issues", icon: ListChecks },
   { title: "Volunteers", url: "/volunteers", icon: Users },
   { title: "Action Plan", url: "/action-plan", icon: FileText },
@@ -69,7 +62,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div>
-              <h1 className="text-sidebar-primary font-bold text-base leading-tight">ImpactMapper</h1>
+              <h1 className="text-sidebar-primary font-bold text-base leading-tight">Sahayak</h1>
               <p className="text-sidebar-foreground/40 text-[10px] leading-tight">NGO coordination workspace</p>
             </div>
           )}

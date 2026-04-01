@@ -28,6 +28,53 @@ interface Volunteer {
   name: string;
 }
 
+const DEMO_ISSUES: Issue[] = [
+  {
+    id: "demo-issue-1",
+    issue_summary: "Drinking water shortage in Rampur for 5 days. Immediate tanker support needed.",
+    sector: "water",
+    location: "Rampur",
+    affected_count: 220,
+    priority_score: 9.1,
+    status: "unassigned",
+    assigned_volunteer_id: null,
+    assignment_reason: null,
+  },
+  {
+    id: "demo-issue-2",
+    issue_summary: "Primary health center in Meerut is low on antibiotics and first-aid supplies.",
+    sector: "healthcare",
+    location: "Meerut",
+    affected_count: 480,
+    priority_score: 8.4,
+    status: "assigned",
+    assigned_volunteer_id: null,
+    assignment_reason: "Awaiting NGO assignment sync",
+  },
+  {
+    id: "demo-issue-3",
+    issue_summary: "Flood-affected families in Dibrugarh need temporary shelter kits and dry food.",
+    sector: "shelter",
+    location: "Dibrugarh",
+    affected_count: 75,
+    priority_score: 8.9,
+    status: "unassigned",
+    assigned_volunteer_id: null,
+    assignment_reason: null,
+  },
+  {
+    id: "demo-issue-4",
+    issue_summary: "School sanitation units in Kharagpur are damaged and require urgent repairs.",
+    sector: "sanitation",
+    location: "Kharagpur",
+    affected_count: 160,
+    priority_score: 7.2,
+    status: "resolved",
+    assigned_volunteer_id: null,
+    assignment_reason: "Resolved by local sanitation task force",
+  },
+];
+
 const SECTOR_COLORS: Record<string, string> = {
   water: "bg-teal-100 text-teal-700 border-teal-200",
   healthcare: "bg-red-100 text-red-700 border-red-200",
@@ -79,8 +126,10 @@ export default function Issues() {
         supabase.from("issues").select("*"),
         supabase.from("volunteers").select("id, name"),
       ]);
-      setIssues(issuesRes.data || []);
-      setVolunteers(volRes.data || []);
+
+      const dbIssues = (issuesRes.data || []) as Issue[];
+      setIssues(dbIssues.length > 0 ? dbIssues : DEMO_ISSUES);
+      setVolunteers((volRes.data || []) as Volunteer[]);
       setLoading(false);
     };
     fetchData();

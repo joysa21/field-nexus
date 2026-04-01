@@ -79,9 +79,17 @@ export default function NgoDirectory() {
                 <p><span className="font-medium">Sector:</span> {ngo.details?.sector || "Not set"}</p>
                 <p><span className="font-medium">Location:</span> {ngo.location || "Not set"}</p>
                 <p className="text-muted-foreground line-clamp-2">{ngo.details?.description || "No description"}</p>
-                <Button asChild variant="outline" size="sm">
-                  <Link to={`/profile/${ngo.id}`}>View Profile</Link>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={`/profile/${ngo.id}`}>View Profile</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => toast.success(`Interest sent to help ${ngo.display_name}.`)}
+                  >
+                    Help this NGO
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

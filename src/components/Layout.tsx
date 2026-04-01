@@ -32,9 +32,6 @@ export default function Layout() {
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
             <div className="flex items-center gap-2">
               {isAuthenticated && <NotificationBell />}
-              <Button asChild size="sm" variant="ghost">
-                <Link to="/profile">Profile</Link>
-              </Button>
               {isAuthenticated ? (
                 <Button size="sm" variant="outline" onClick={signOut}>Sign out</Button>
               ) : (

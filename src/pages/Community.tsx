@@ -198,8 +198,8 @@ export default function Community() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Community</h1>
-          <p className="text-sm text-muted-foreground mt-1">Requests, volunteer offers, and public collaboration feed.</p>
+          <h1 className="text-2xl font-bold">Community Connections</h1>
+          <p className="text-sm text-muted-foreground mt-1">NGOs needing help, volunteer offers, and public collaboration feed.</p>
         </div>
         <div className="flex items-center gap-2">
           {profile?.role === "ngo" && <RequestFormDialog onSubmit={handleCreateRequest} />}

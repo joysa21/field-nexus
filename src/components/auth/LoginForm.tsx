@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { ensureProfileForCurrentUser } from "@/services/impactService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -19,11 +18,12 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
   userType: "individual" | "ngo";
-  onSuccess: (user: any) => void;
+  onSuccess: () => void;
 }
 
 export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,32 +37,16 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
     try {
       setIsLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      });
-
-      if (error || !data.user) {
-        throw new Error(error?.message || "Login failed.");
+      const result = await login(values.email, values.password, userType);
+      if (result.error) {
+        toast.error(result.error);
+        return;
       }
 
-      const metadata = data.user.user_metadata || {};
-      const resolvedRole = (metadata.role || metadata.userType || userType) as "individual" | "ngo";
-      const displayName = metadata.displayName || metadata.full_name || values.email.split("@")[0] || "User";
-
-      await ensureProfileForCurrentUser(resolvedRole === "ngo" ? "ngo" : "individual", displayName);
-
-      const user = {
-        id: data.user.id,
-        email: values.email,
-        userType: resolvedRole,
-        loginTime: new Date().toISOString(),
-      };
-
-      toast.success(`Welcome back!`);
-      onSuccess(user);
+      toast.success("Welcome back!");
+      onSuccess();
     } catch (error) {
-      toast.error("Login failed. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Login failed. Please try again.");
     } finally {
       setIsLoading(false);
     }

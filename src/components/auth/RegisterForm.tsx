@@ -14,8 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { ensureProfileForCurrentUser } from "@/services/impactService";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Individual Registration Schema
 const individualRegisterSchema = z.object({
@@ -41,7 +40,7 @@ type FormValues = IndividualFormValues | NGOFormValues;
 
 interface RegisterFormProps {
   userType: "individual" | "ngo";
-  onSuccess: (user: any) => void;
+  onSuccess: () => void;
 }
 
 const NGO_TYPES = [
@@ -57,6 +56,7 @@ const NGO_TYPES = [
 
 export default function RegisterForm({ userType, onSuccess }: RegisterFormProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const { register } = useAuth();
 
   const schema = userType === "individual" ? individualRegisterSchema : ngoRegisterSchema;
   const form = useForm<FormValues>({
@@ -80,40 +80,33 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
     try {
       setIsLoading(true);
 
-      const displayName = userType === "individual"
-        ? (values as IndividualFormValues).name
+      const displayName = userType === "individual" 
+        ? (values as IndividualFormValues).name 
         : (values as NGOFormValues).ngoName;
 
-      const { data, error } = await supabase.auth.signUp({
+      const result = await register({
         email: values.email,
         password: values.password,
-        options: {
-          data: {
-            role: userType,
-            userType,
-            displayName,
-          },
-        },
+        userType,
+        name: userType === "individual" ? (values as IndividualFormValues).name : (values as NGOFormValues).ngoName,
+        location: values.location,
+        contactNumber: userType === "individual" ? (values as IndividualFormValues).contactNumber : undefined,
+        ngoType: userType === "ngo" ? (values as NGOFormValues).ngoType : undefined,
       });
 
-      if (error) {
-        throw new Error(error.message);
+      if (result.error) {
+        toast.error(result.error);
+        return;
       }
 
-      if (data.user) {
-        await ensureProfileForCurrentUser(userType === "ngo" ? "ngo" : "individual", displayName);
+      if (result.needsEmailVerification) {
+        toast.success("Account created. Please verify your email, then sign in.");
+        onSuccess();
+        return;
       }
 
-      const user = {
-        id: data.user?.id || crypto.randomUUID(),
-        userType: userType,
-        email: values.email,
-        registrationTime: new Date().toISOString(),
-        ...values,
-      };
-      
       toast.success(`Welcome, ${displayName}! Account created successfully.`);
-      onSuccess(user);
+      onSuccess();
     } catch (error) {
       toast.error("Registration failed. Please try again.");
     } finally {

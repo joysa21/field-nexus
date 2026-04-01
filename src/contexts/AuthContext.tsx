@@ -1,87 +1,241 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+
+export type UserType = "individual" | "ngo";
 
 interface User {
   id: string;
-  username: string;
   email: string;
-  userType: "individual" | "ngo";
-  loginTime?: string;
-  registrationTime?: string;
+  userType: UserType;
+  name?: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  userType: UserType;
+  name?: string;
+  location?: string;
+  contactNumber?: string;
+  ngoType?: string;
+}
+
+interface AuthResult {
+  error?: string;
+  needsEmailVerification?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (user: User) => void;
-  logout: () => void;
-  register: (user: User) => void;
+  login: (email: string, password: string, userType: UserType) => Promise<AuthResult>;
+  logout: () => Promise<void>;
+  register: (input: RegisterInput) => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const mapToAppUser = (
+  authUser: SupabaseUser,
+  profile?: { user_type?: UserType | null; full_name?: string | null },
+): User => {
+  const metadataUserType = authUser.user_metadata?.user_type;
+  return {
+    id: authUser.id,
+    email: authUser.email ?? "",
+    userType: profile?.user_type ?? (metadataUserType === "ngo" ? "ngo" : "individual"),
+    name: profile?.full_name ?? undefined,
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const AUTH_INIT_TIMEOUT_MS = 6000;
+  const AUTH_REQUEST_TIMEOUT_MS = 20000;
 
-  useEffect(() => {
-    const syncFromSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs),
+      ),
+    ]);
+  };
 
-      if (!session?.user) {
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-
-      const metadata = session.user.user_metadata || {};
-      setUser({
-        id: session.user.id,
-        username: metadata.displayName || metadata.full_name || session.user.email?.split("@")[0] || "User",
-        email: session.user.email || "",
-        userType: (metadata.userType || metadata.role || "individual") as "individual" | "ngo",
-        loginTime: session.user.last_sign_in_at || new Date().toISOString(),
-      });
-      setIsLoading(false);
+  const upsertProfile = async (
+    authUser: SupabaseUser,
+    userType: UserType,
+    details: {
+      full_name?: string;
+      location?: string;
+      contact_number?: string;
+      ngo_type?: string;
+    } = {},
+  ) => {
+    const payload = {
+      id: authUser.id,
+      email: authUser.email ?? "",
+      user_type: userType,
+      full_name: details.full_name ?? null,
+      location: details.location ?? null,
+      contact_number: details.contact_number ?? null,
+      ngo_type: details.ngo_type ?? null,
+      updated_at: new Date().toISOString(),
     };
 
-    syncFromSession();
+    await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+  };
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
+  const getProfile = async (userId: string) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_type, full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    return data;
+  };
+
+  const trackAuthEvent = async (eventType: "login" | "signup", userId: string, email: string) => {
+    await supabase.from("auth_events").insert({
+      user_id: userId,
+      event_type: eventType,
+      email,
+      logged_at: new Date().toISOString(),
+    });
+  };
+
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) {
+          console.error("Supabase env vars are missing. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
+          setUser(null);
+          return;
+        }
+
+        const { data } = await withTimeout(supabase.auth.getSession(), AUTH_INIT_TIMEOUT_MS, "getSession");
+        const sessionUser = data.session?.user;
+
+        if (sessionUser) {
+          const profile = await withTimeout(getProfile(sessionUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile");
+          setUser(mapToAppUser(sessionUser, profile));
+        }
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user;
+      if (!sessionUser) {
         setUser(null);
         return;
       }
 
-      const metadata = session.user.user_metadata || {};
-      setUser({
-        id: session.user.id,
-        username: metadata.displayName || metadata.full_name || session.user.email?.split("@")[0] || "User",
-        email: session.user.email || "",
-        userType: (metadata.userType || metadata.role || "individual") as "individual" | "ngo",
-        loginTime: session.user.last_sign_in_at || new Date().toISOString(),
-      });
+      setUser(mapToAppUser(sessionUser, { user_type: sessionUser.user_metadata?.user_type }));
+
+      void getProfile(sessionUser.id)
+        .then((profile) => setUser(mapToAppUser(sessionUser, profile)))
+        .catch((error) => console.error("Auth state sync failed:", error));
     });
 
     return () => {
-      data.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  const login = (newUser: User) => {
-    setUser(newUser);
+  const login = async (email: string, password: string, userType: UserType): Promise<AuthResult> => {
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        AUTH_REQUEST_TIMEOUT_MS,
+        "signInWithPassword",
+      );
+      if (error) return { error: error.message };
+
+      const authUser = data.user;
+      if (!authUser) return { error: "Unable to load account session." };
+
+      setUser(mapToAppUser(authUser, { user_type: userType }));
+
+      void Promise.allSettled([
+        upsertProfile(authUser, userType),
+        trackAuthEvent("login", authUser.id, authUser.email ?? email),
+        withTimeout(getProfile(authUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile")
+          .then((profile) => setUser(mapToAppUser(authUser, profile)))
+          .catch((error) => console.error("Profile sync after login failed:", error)),
+      ]);
+
+      return {};
+    } catch (error) {
+      const message = error instanceof Error && error.message.includes("timed out")
+        ? "Sign in is taking too long. Please check your connection and Supabase settings."
+        : error instanceof Error
+          ? error.message
+          : "Sign in failed. Please try again.";
+      return { error: message };
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    supabase.auth.signOut();
   };
 
-  const register = (newUser: User) => {
-    setUser(newUser);
+  const register = async (input: RegisterInput): Promise<AuthResult> => {
+    const { email, password, userType, name, location, contactNumber, ngoType } = input;
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              user_type: userType,
+              full_name: name ?? null,
+            },
+          },
+        }),
+        AUTH_REQUEST_TIMEOUT_MS,
+        "signUp",
+      );
+
+      if (error) return { error: error.message };
+      if (!data.user) return { error: "Account created, but user details are unavailable." };
+
+      await upsertProfile(data.user, userType, {
+        full_name: name,
+        location,
+        contact_number: contactNumber,
+        ngo_type: ngoType,
+      });
+
+      if (data.session) {
+        const profile = await getProfile(data.user.id);
+        setUser(mapToAppUser(data.user, profile));
+        await trackAuthEvent("signup", data.user.id, data.user.email ?? email);
+        return {};
+      }
+
+      return { needsEmailVerification: true };
+    } catch (error) {
+      const message = error instanceof Error && error.message.includes("timed out")
+        ? "Sign up is taking too long. Please check your connection and Supabase settings."
+        : error instanceof Error
+          ? error.message
+          : "Sign up failed. Please try again.";
+      return { error: message };
+    }
   };
 
   return (

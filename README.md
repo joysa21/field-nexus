@@ -68,8 +68,16 @@ The UI currently reads/writes these tables:
 - `issues`
 - `volunteers`
 - `agent_runs`
+- `profiles`
+- `auth_events`
 
 Make sure these tables (and referenced columns) exist before running the app in a new Supabase project.
+
+For auth setup SQL (profiles + login/signup event logging + RLS), run:
+
+```bash
+supabase/sql/auth_setup.sql
+```
 
 ## Testing
 

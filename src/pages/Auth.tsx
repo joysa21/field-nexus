@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,24 +9,22 @@ import RegisterForm from "@/components/auth/RegisterForm";
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { isAuthenticated, register, login } = useAuth();
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [userType, setUserType] = useState<"individual" | "ngo">("individual");
+  const returnTo = (location.state as { from?: string } | null)?.from ?? "/";
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
-    navigate("/");
-    return null;
+    return <Navigate to={returnTo} replace />;
   }
 
-  const handleLoginSuccess = (user: any) => {
-    login(user);
-    navigate("/");
+  const handleLoginSuccess = () => {
+    navigate(returnTo);
   };
 
-  const handleRegisterSuccess = (user: any) => {
-    register(user);
-    navigate("/");
+  const handleRegisterSuccess = () => {
+    setActiveTab("login");
   };
 
   return (

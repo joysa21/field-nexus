@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -20,6 +21,7 @@ interface Issue {
   priority_score: number | null;
   status: string | null;
   assigned_volunteer_id: string | null;
+  assignment_reason?: string | null;
 }
 
 interface Volunteer {
@@ -50,6 +52,38 @@ const SECTOR_COLORS: Record<string, string> = {
   counseling: "#ec4899",
   other: "#94a3b8",
 };
+
+const SECTOR_SKILL_MATCHES: Record<string, string[]> = {
+  water: ["water", "sanitation", "logistics"],
+  healthcare: ["healthcare", "counseling"],
+  electricity: ["electricity", "logistics"],
+  food: ["food", "logistics"],
+  education: ["education", "counseling"],
+  shelter: ["shelter", "logistics"],
+  sanitation: ["sanitation", "water", "logistics"],
+  safety: ["safety", "logistics"],
+  logistics: ["logistics"],
+  counseling: ["counseling", "healthcare"],
+  other: [],
+};
+
+interface MatchResult {
+  volunteer: Volunteer;
+  score: number;
+  matchedSkills: string[];
+  currentLoad: number;
+}
+
+interface IssueMatch {
+  issue: Issue;
+  assignedVolunteer: Volunteer | null;
+  recommendedVolunteer: MatchResult | null;
+  backupVolunteer: MatchResult | null;
+  matchLabel: string;
+  matchReason: string;
+}
+
+const normalizeValue = (value?: string | null) => value?.toLowerCase().trim() ?? "";
 
 export default function ActionPlan() {
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -93,6 +127,64 @@ export default function ActionPlan() {
   const getVolName = (id: string | null) =>
     id ? volunteers.find((v) => v.id === id)?.name || "—" : "—";
 
+  const issueMatches = useMemo<IssueMatch[]>(() => {
+    return issues.map((issue) => {
+      const sectorKey = normalizeValue(issue.sector) || "other";
+      const requiredSkills = SECTOR_SKILL_MATCHES[sectorKey] || [];
+      const assignedVolunteer = volunteers.find((volunteer) => volunteer.id === issue.assigned_volunteer_id) || null;
+
+      const scoredCandidates = volunteers
+        .map<MatchResult>((volunteer) => {
+          const volunteerSkills = (volunteer.skills || []).map(normalizeValue).filter(Boolean);
+          const matchedSkills = requiredSkills.filter((skill) => volunteerSkills.includes(skill));
+          const currentLoad = assignedCounts[volunteer.id] || 0;
+
+          let score = matchedSkills.length * 10;
+          if (normalizeValue(issue.sector) && volunteerSkills.includes(normalizeValue(issue.sector))) {
+            score += 12;
+          }
+          if (["water", "food", "shelter", "sanitation"].includes(sectorKey) && volunteerSkills.includes("logistics")) {
+            score += 3;
+          }
+          if (assignedVolunteer?.id === volunteer.id) {
+            score += 40;
+          }
+          score -= currentLoad * 1.5;
+
+          return { volunteer, score, matchedSkills, currentLoad };
+        })
+        .sort((left, right) => {
+          if (right.score !== left.score) return right.score - left.score;
+          if (left.currentLoad !== right.currentLoad) return left.currentLoad - right.currentLoad;
+          return left.volunteer.name.localeCompare(right.volunteer.name);
+        });
+
+      const recommendedVolunteer = scoredCandidates[0] || null;
+      const backupVolunteer = scoredCandidates[1] || null;
+
+      const matchedSkillsText = recommendedVolunteer?.matchedSkills.length
+        ? `matches ${recommendedVolunteer.matchedSkills.join(", ")}`
+        : `best available for ${issue.sector || "other"}`;
+      const loadText = recommendedVolunteer
+        ? recommendedVolunteer.currentLoad > 0
+          ? `${recommendedVolunteer.currentLoad} active issue${recommendedVolunteer.currentLoad === 1 ? "" : "s"}`
+          : "light workload"
+        : "no active volunteer available";
+
+      return {
+        issue,
+        assignedVolunteer,
+        recommendedVolunteer,
+        backupVolunteer,
+        matchLabel: assignedVolunteer ? "Assigned" : recommendedVolunteer ? "Suggested" : "Unmatched",
+        matchReason: `${matchedSkillsText} • ${loadText}`,
+      };
+    });
+  }, [assignedCounts, issues, volunteers]);
+
+  const getRecommendedVolunteer = (issueId: string | null) =>
+    issueMatches.find((match) => match.issue.id === issueId);
+
   const alerts: any[] = lastRun?.alerts || [];
 
   const SeverityIcon = ({ severity }: { severity: string }) => {
@@ -127,6 +219,59 @@ export default function ActionPlan() {
             <p className="text-xs text-muted-foreground mt-1">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Issue-to-volunteer map */}
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Issue-to-Volunteer Map</h2>
+        <div className="grid gap-3">
+          {issueMatches.length === 0 ? (
+            <div className="h-28 flex items-center justify-center text-muted-foreground text-sm border rounded-lg">
+              No issues or volunteers available to match yet.
+            </div>
+          ) : (
+            issueMatches.map(({ issue, assignedVolunteer, recommendedVolunteer, backupVolunteer, matchLabel, matchReason }) => (
+              <div key={issue.id} className="border rounded-lg p-4 space-y-3 bg-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm text-foreground line-clamp-2">{issue.issue_summary}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {issue.location || "Unknown location"} • {issue.sector || "other"}
+                    </p>
+                  </div>
+                  <Badge variant={matchLabel === "Assigned" ? "default" : matchLabel === "Suggested" ? "secondary" : "outline"}>
+                    {matchLabel}
+                  </Badge>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Best volunteer</p>
+                    <p className="text-sm font-semibold mt-1">
+                      {assignedVolunteer?.name || recommendedVolunteer?.volunteer.name || "No volunteer available"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{matchReason}</p>
+                  </div>
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Backup volunteer</p>
+                    <p className="text-sm font-semibold mt-1">
+                      {backupVolunteer?.volunteer.name || "No backup volunteer"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {backupVolunteer
+                        ? `${(backupVolunteer.volunteer.skills || []).slice(0, 3).join(", ") || "No skills listed"}`
+                        : "No alternate match found"}
+                    </p>
+                  </div>
+                </div>
+
+                {issue.assignment_reason && (
+                  <p className="text-xs text-muted-foreground italic">Existing assignment note: {issue.assignment_reason}</p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Section 2 — Priority Issues Table */}
@@ -166,7 +311,16 @@ export default function ActionPlan() {
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{issue.location || "—"}</TableCell>
-                    <TableCell className="text-xs">{getVolName(issue.assigned_volunteer_id)}</TableCell>
+                    <TableCell className="text-xs">
+                      <div className="space-y-1">
+                        <p>{getVolName(issue.assigned_volunteer_id)}</p>
+                        {!issue.assigned_volunteer_id && getRecommendedVolunteer(issue.id)?.recommendedVolunteer && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Suggested: {getRecommendedVolunteer(issue.id)?.recommendedVolunteer?.volunteer.name}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span className="text-xs capitalize">{issue.status || "unassigned"}</span>
                     </TableCell>

@@ -32,13 +32,13 @@ import {
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Run Agents", url: "/run", icon: Play, accent: true },
-  { title: "Community Connections", url: "/community", icon: MessageSquare },
-  { title: "Saved", url: "/saved", icon: Bookmark },
-  { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Issues", url: "/issues", icon: ListChecks },
   { title: "Volunteers", url: "/volunteers", icon: Users },
   { title: "Action Plan", url: "/action-plan", icon: FileText },
   { title: "Agent Logs", url: "/logs", icon: Terminal },
+  { title: "Community Connections", url: "/community", icon: MessageSquare },
+  { title: "Saved", url: "/saved", icon: Bookmark },
+  { title: "Notifications", url: "/notifications", icon: Bell },
 ];
 
 export function AppSidebar() {
@@ -139,11 +139,6 @@ export function AppSidebar() {
           </Button>
         )}
         
-        {!collapsed && (
-          <p className="text-sidebar-foreground/30 text-[10px]">
-            v0.1.0 — stub agents
-          </p>
-        )}
       </SidebarFooter>
     </Sidebar>
   );

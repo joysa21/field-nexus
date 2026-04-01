@@ -311,6 +311,11 @@ const splitList = (value: string): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const isMissingTableError = (error: unknown) => {
+  const message = (error as { message?: string } | null)?.message?.toLowerCase() || "";
+  return message.includes("could not find the table") || message.includes("schema cache");
+};
+
 const buildOwnerMap = async () => {
   const { data } = await supabase
     .from("profiles")
@@ -446,8 +451,7 @@ export async function getCommunityFeed() {
     return buildMockCommunityFeed();
   }
 
-  const [ownerMap, requestsResult, offersResult] = await Promise.all([
-    buildOwnerMap(),
+  const [requestsResult, offersResult] = await Promise.all([
     supabase
       .from("ngo_requests")
       .select("*")
@@ -457,6 +461,12 @@ export async function getCommunityFeed() {
       .select("*")
       .order("created_at", { ascending: false }),
   ]);
+
+  if (isMissingTableError(requestsResult.error) || isMissingTableError(offersResult.error)) {
+    return buildMockCommunityFeed();
+  }
+
+  const ownerMap = await buildOwnerMap();
 
   if (requestsResult.error) throw requestsResult.error;
   if (offersResult.error) throw offersResult.error;
@@ -782,6 +792,10 @@ export async function getSavedPosts() {
     getCommunityFeed(),
   ]);
 
+  if (isMissingTableError(savedResult.error)) {
+    return feed.slice(0, 3);
+  }
+
   if (savedResult.error) throw savedResult.error;
 
   const savedLookup = new Set(
@@ -799,6 +813,20 @@ export async function getNotifications() {
     const mockUserId = user?.id || "mock-user";
     const now = new Date();
     return [
+      {
+        id: "mock-notif-fest-2026",
+        user_id: mockUserId,
+        actor_id: null,
+        event_type: "ngo_fest_2026",
+        title: "NGO Fest 2026",
+        body: "Happening on 5th April, 2026 at Enlarge Mall, Preet Vihar, New Delhi. Timings: 12:00 noon onwards.",
+        is_read: false,
+        related_request_id: null,
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        created_at: new Date(now.getTime() - 20 * 60_000).toISOString(),
+      },
       {
         id: "mock-notif-1",
         user_id: mockUserId,
@@ -853,6 +881,54 @@ export async function getNotifications() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(30);
+
+  if (isMissingTableError(error)) {
+    const now = new Date();
+    return [
+      {
+        id: "fallback-notif-fest-2026",
+        user_id: user.id,
+        actor_id: null,
+        event_type: "ngo_fest_2026",
+        title: "NGO Fest 2026",
+        body: "Happening on 5th April, 2026 at Enlarge Mall, Preet Vihar, New Delhi. Timings: 12:00 noon onwards.",
+        related_request_id: null,
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        is_read: false,
+        created_at: new Date(now.getTime() - 20 * 60_000).toISOString(),
+      },
+      {
+        id: "fallback-notif-1",
+        user_id: user.id,
+        actor_id: null,
+        event_type: "fallback_notice",
+        title: "Using demo notifications",
+        body: "Supabase notifications table is not available yet. Showing demo activity.",
+        related_request_id: null,
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        is_read: false,
+        created_at: new Date(now.getTime() - 30 * 60_000).toISOString(),
+      },
+      {
+        id: "fallback-notif-2",
+        user_id: user.id,
+        actor_id: null,
+        event_type: "new_ngo_request",
+        title: "New NGO request posted",
+        body: "WaterBridge Alliance requested 3 field volunteers.",
+        related_request_id: null,
+        related_offer_id: null,
+        related_connection_id: null,
+        related_comment_id: null,
+        is_read: true,
+        created_at: new Date(now.getTime() - 3 * 3600_000).toISOString(),
+      },
+    ] as NotificationItem[];
+  }
 
   if (error) throw error;
   return data || [];

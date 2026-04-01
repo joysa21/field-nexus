@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { ensureProfileForCurrentUser } from "@/services/impactService";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -34,15 +36,26 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
   const onSubmit = async (values: LoginFormValues) => {
     try {
       setIsLoading(true);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock authentication
-      const user = {
-        id: Math.random().toString(),
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
-        userType: userType,
+        password: values.password,
+      });
+
+      if (error || !data.user) {
+        throw new Error(error?.message || "Login failed.");
+      }
+
+      const metadata = data.user.user_metadata || {};
+      const resolvedRole = (metadata.role || metadata.userType || userType) as "individual" | "ngo";
+      const displayName = metadata.displayName || metadata.full_name || values.email.split("@")[0] || "User";
+
+      await ensureProfileForCurrentUser(resolvedRole === "ngo" ? "ngo" : "individual", displayName);
+
+      const user = {
+        id: data.user.id,
+        email: values.email,
+        userType: resolvedRole,
         loginTime: new Date().toISOString(),
       };
 

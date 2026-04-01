@@ -35,6 +35,10 @@ export default function Notifications() {
     }
   };
 
+  const joinEvent = (item: NotificationItem) => {
+    toast.success(`You have joined ${item.title}. See you at Enlarge Mall, Preet Vihar, New Delhi.`);
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div>
@@ -62,11 +66,18 @@ export default function Notifications() {
                   {item.body && <p className="text-sm text-muted-foreground mt-1">{item.body}</p>}
                   <p className="text-xs text-muted-foreground mt-1">{new Date(item.created_at).toLocaleString()}</p>
                 </div>
-                {!item.is_read && (
-                  <Button variant="outline" size="sm" onClick={() => markRead(item.id)}>
-                    Mark read
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {item.event_type === "ngo_fest_2026" && (
+                    <Button size="sm" onClick={() => joinEvent(item)}>
+                      Join
+                    </Button>
+                  )}
+                  {!item.is_read && (
+                    <Button variant="outline" size="sm" onClick={() => markRead(item.id)}>
+                      Mark read
+                    </Button>
+                  )}
+                </div>
               </div>
             ))
           )}

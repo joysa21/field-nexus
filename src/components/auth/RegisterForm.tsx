@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { ensureProfileForCurrentUser } from "@/services/impactService";
 
 // Individual Registration Schema
 const individualRegisterSchema = z.object({
@@ -77,22 +79,38 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
   const onSubmit = async (values: FormValues) => {
     try {
       setIsLoading(true);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock registration
+
+      const displayName = userType === "individual"
+        ? (values as IndividualFormValues).name
+        : (values as NGOFormValues).ngoName;
+
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: {
+            role: userType,
+            userType,
+            displayName,
+          },
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        await ensureProfileForCurrentUser(userType === "ngo" ? "ngo" : "individual", displayName);
+      }
+
       const user = {
-        id: Math.random().toString(),
+        id: data.user?.id || crypto.randomUUID(),
         userType: userType,
         email: values.email,
         registrationTime: new Date().toISOString(),
         ...values,
       };
-
-      const displayName = userType === "individual" 
-        ? (values as IndividualFormValues).name 
-        : (values as NGOFormValues).ngoName;
       
       toast.success(`Welcome, ${displayName}! Account created successfully.`);
       onSuccess(user);

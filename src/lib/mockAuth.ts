@@ -14,7 +14,7 @@ export interface MockSession {
 }
 
 export function isMockAuthEnabled() {
-  return true;
+  return false;
 }
 
 export function getMockSession(): MockSession | null {

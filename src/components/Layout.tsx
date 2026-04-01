@@ -3,7 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/community/NotificationBell";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { toast } from "sonner";
@@ -32,12 +32,8 @@ export default function Layout() {
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
             <div className="flex items-center gap-2">
               {isAuthenticated && <NotificationBell />}
-              {isAuthenticated ? (
+              {isAuthenticated && (
                 <Button size="sm" variant="outline" onClick={signOut}>Sign out</Button>
-              ) : (
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/auth">Sign in</Link>
-                </Button>
               )}
             </div>
           </header>

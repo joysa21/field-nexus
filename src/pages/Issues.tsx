@@ -126,13 +126,25 @@ export default function Issues() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIssues([]);
+        setVolunteers([]);
+        setLoading(false);
+        return;
+      }
+
       const [issuesRes, volRes] = await Promise.all([
-        supabase.from("issues").select("*"),
-        supabase.from("volunteers").select("id, name"),
+        supabase.from("issues").select("*").eq("ngo_user_id", user.id),
+        supabase.from("volunteers").select("id, name").eq("ngo_user_id", user.id),
       ]);
 
       const dbIssues = (issuesRes.data || []) as Issue[];
-      setIssues(dbIssues.length > 0 ? dbIssues : DEMO_ISSUES);
+      setIssues(dbIssues.length > 0 ? dbIssues : []);
       setVolunteers((volRes.data || []) as Volunteer[]);
       setLoading(false);
     };

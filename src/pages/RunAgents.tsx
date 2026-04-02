@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { CheckCircle, Circle, Loader2, SkipForward, ArrowRight } from "lucide-react";
+import { CheckCircle, Circle, Loader2, SkipForward, ArrowRight, Upload, Download, FileText } from "lucide-react";
+import { processFilesWithGemini, formatOutputForDownload, downloadAsTextFile, type ProcessedOutput } from "@/services/geminiService";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatTime } from "@/lib/i18n";
 
 const STEPS = [
   { key: "ingestion", labelKey: "runAgents.ingestion", descriptionKey: "runAgents.detectingInput" },
@@ -36,12 +36,23 @@ function getStepStatus(stepKey: string, currentStep: string, isComplete: boolean
   return "waiting";
 }
 
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
 export default function RunAgents() {
   const [rawInput, setRawInput] = useState("");
   const [running, setRunning] = useState(false);
   const [agentState, setAgentState] = useState<AgentState | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
+  
+  // File upload states
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [processingFiles, setProcessingFiles] = useState(false);
+  const [processedOutput, setProcessedOutput] = useState<ProcessedOutput | null>(null);
+  const [processingProgress, setProcessingProgress] = useState("");
 
   useEffect(() => {
     if (consoleRef.current) {
@@ -49,19 +60,78 @@ export default function RunAgents() {
     }
   }, [agentState?.agentLogs]);
 
-  const handleRun = async () => {
-    if (!rawInput.trim()) {
-      toast.error(t("runAgents.pasteReportFirst"));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setUploadedFiles((prev) => [...prev, ...files]);
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleProcessFiles = async () => {
+    if (uploadedFiles.length === 0) {
+      toast.error("Please select at least one file to process.");
+      return;
+    }
+
+    setProcessingFiles(true);
+    setProcessingProgress("Initializing...");
+    setProcessedOutput(null);
+
+    try {
+      const output = await processFilesWithGemini(uploadedFiles, (msg) => {
+        setProcessingProgress(msg);
+      });
+
+      setProcessedOutput(output);
+      setRawInput(output.processedText);
+      toast.success(`Successfully processed ${uploadedFiles.length} file(s)`);
+    } catch (e: any) {
+      toast.error("File processing failed: " + e.message);
+      setProcessingProgress("");
+    } finally {
+      setProcessingFiles(false);
+    }
+  };
+
+  const handleDownloadProcessed = () => {
+    if (!processedOutput) {
+      toast.error("No processed data to download.");
+      return;
+    }
+
+    const formatted = formatOutputForDownload(processedOutput);
+    downloadAsTextFile(formatted, "processed-report");
+    toast.success("Report downloaded successfully!");
+  };
+
+  const handleRunWithInput = async (input: string = rawInput) => {
+    if (!input.trim()) {
+      toast.error("Please paste a field report first.");
       return;
     }
     setRunning(true);
     setAgentState(null);
 
     try {
-      const { data: volunteers } = await supabase.from("volunteers").select("*").eq("is_active", true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("Please sign in first.");
+        return;
+      }
+
+      const { data: volunteers } = await supabase
+        .from("volunteers")
+        .select("*")
+        .eq("ngo_user_id", user.id)
+        .eq("is_active", true);
 
       const finalState = await runOrchestrator(
-        rawInput,
+        input,
         volunteers || [],
         (state) => setAgentState({ ...state })
       );
@@ -76,7 +146,12 @@ export default function RunAgents() {
       if (runErr) throw runErr;
 
       if (finalState.issues.length > 0) {
-        const { error: issuesErr } = await supabase.from("issues").insert(finalState.issues);
+        const issuesPayload = finalState.issues.map((issue) => ({
+          ...issue,
+          ngo_user_id: user.id,
+        }));
+
+        const { error: issuesErr } = await supabase.from("issues").insert(issuesPayload);
         if (issuesErr) throw issuesErr;
       }
 
@@ -86,6 +161,10 @@ export default function RunAgents() {
     } finally {
       setRunning(false);
     }
+  };
+
+  const handleRun = async () => {
+    await handleRunWithInput(rawInput);
   };
 
   const currentStep = agentState?.currentStep || "starting";
@@ -99,7 +178,114 @@ export default function RunAgents() {
           <p className="text-muted-foreground text-sm mt-1">{t("runAgents.subtitle")}</p>
       </div>
 
-      {/* Input */}
+      {/* File Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            Organize Unstructured Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Upload multiple files and reports. Gemini AI will organize, sort, and structure the data for you.
+          </p>
+
+          {/* File Input */}
+          <div className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 hover:border-muted-foreground/40 transition cursor-pointer">
+            <label className="flex flex-col items-center gap-2 cursor-pointer">
+              <FileText className="w-8 h-8 text-muted-foreground" />
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">Select files to upload</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Supports .txt, .pdf (as text), .csv, .json and other document formats
+                </p>
+              </div>
+              <input
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                disabled={processingFiles}
+                className="hidden"
+                accept=".txt,.pdf,.csv,.json,.doc,.docx,.xls,.xlsx"
+              />
+            </label>
+          </div>
+
+          {/* File List */}
+          {uploadedFiles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Selected files ({uploadedFiles.length}):</p>
+              <div className="space-y-2">
+                {uploadedFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2 bg-muted rounded-md"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-foreground truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFile(idx)}
+                      disabled={processingFiles}
+                      className="text-xs text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Processing Status */}
+          {processingProgress && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                <p className="text-sm text-blue-700">{processingProgress}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={handleProcessFiles}
+              disabled={processingFiles || uploadedFiles.length === 0}
+              className="gap-2 flex-1"
+            >
+              {processingFiles ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Process Files with Gemini
+                </>
+              )}
+            </Button>
+            {processedOutput && (
+              <Button
+                onClick={handleDownloadProcessed}
+                variant="outline"
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div>

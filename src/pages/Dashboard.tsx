@@ -50,25 +50,28 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     setLoading(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setStats({ totalIssues: 0, criticalIssues: 0, activeVolunteers: 0, unassignedIssues: 0 });
+      setSectorData([]);
+      setLoading(false);
+      return;
+    }
+
     const [issuesRes, volunteersRes] = await Promise.all([
-      supabase.from("issues").select("priority_score, status, sector"),
-      supabase.from("volunteers").select("is_active"),
+      supabase.from("issues").select("priority_score, status, sector").eq("ngo_user_id", user.id),
+      supabase.from("volunteers").select("is_active").eq("ngo_user_id", user.id),
     ]);
 
     const dbIssues = issuesRes.data || [];
     const dbVolunteers = volunteersRes.data || [];
 
-    const issues = dbIssues.length > 0
-      ? dbIssues
-      : DEMO_ISSUES.map((issue) => ({
-          priority_score: issue.priority_score,
-          status: issue.status,
-          sector: issue.sector,
-        }));
-
-    const volunteers = dbVolunteers.length > 0
-      ? dbVolunteers
-      : DEMO_VOLUNTEERS.map((volunteer) => ({ is_active: volunteer.is_active }));
+    const issues = dbIssues;
+    const volunteers = dbVolunteers;
 
     const sectorMap: Record<string, number> = {};
     issues.forEach((i) => {
@@ -92,9 +95,27 @@ export default function Dashboard() {
   const loadDemoData = async () => {
     setSeeding(true);
     try {
-      const { error: vErr } = await supabase.from("volunteers").insert(DEMO_VOLUNTEERS);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("Please sign in first.");
+        return;
+      }
+
+      const demoVolunteers = DEMO_VOLUNTEERS.map((volunteer) => ({
+        ...volunteer,
+        ngo_user_id: user.id,
+      }));
+
+      const { error: vErr } = await supabase.from("volunteers").insert(demoVolunteers);
       if (vErr) throw vErr;
-      const { error: iErr } = await supabase.from("issues").insert(DEMO_ISSUES);
+      const demoIssues = DEMO_ISSUES.map((issue) => ({
+        ...issue,
+        ngo_user_id: user.id,
+      }));
+      const { error: iErr } = await supabase.from("issues").insert(demoIssues);
       if (iErr) throw iErr;
       toast.success(t("dashboard.demoLoaded"));
       await fetchStats();

@@ -12,6 +12,7 @@ interface PostCardProps {
   canRespond: boolean;
   isOwner?: boolean;
   isSaved?: boolean;
+  respondLabel?: string;
   onSave?: (post: CommunityPost) => void;
   onRespond?: (post: CommunityPost) => void;
   onEdit?: (post: CommunityPost) => void;
@@ -29,6 +30,7 @@ export function PostCard({
   canRespond,
   isOwner,
   isSaved,
+  respondLabel,
   onSave,
   onRespond,
   onEdit,
@@ -97,7 +99,7 @@ export function PostCard({
           {(post.postType === "ngo_request" ? !isOwner : canRespond) && (
             <Button size="sm" onClick={() => onRespond?.(post)}>
               <Handshake className="h-4 w-4 mr-1" />
-              {post.postType === "ngo_request" ? t("community.helpNgo") : t("community.connect")}
+              {respondLabel || (post.postType === "ngo_request" ? t("community.helpNgo") : t("community.connect"))}
             </Button>
           )}
         </div>

@@ -74,12 +74,12 @@ ${rawInput}
 Return a JSON array of objects with these fields. Only valid sectors allowed.`;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
       }),
     });
 
@@ -155,12 +155,12 @@ Volunteers:
 ${JSON.stringify(compactVolunteers)}
 `;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 3000 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1500 },
     }),
   });
 
@@ -211,12 +211,12 @@ Data:
 ${JSON.stringify(planContext)}
 `;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
     }),
   });
 
@@ -401,6 +401,30 @@ const gapTool = async (state: AgentState): Promise<{ state: AgentState; confiden
   };
 };
 
+// ============ HELPER: Generate Backup Volunteer ============
+const findBackupVolunteer = (
+  assignedVolunteerId: string,
+  issue: any,
+  volunteers: any[],
+  volunteerLoads: Record<string, number>
+): any | null => {
+  const activeVolunteers = volunteers.filter(
+    (v) =>
+      v.is_active &&
+      v.id !== assignedVolunteerId &&
+      (v.skills?.includes(issue.sector) || issue.sector === 'other')
+  );
+
+  if (activeVolunteers.length === 0) {
+    return null;
+  }
+
+  // Pick least-loaded backup volunteer
+  return activeVolunteers.reduce((prev, curr) =>
+    (volunteerLoads[prev.id] || 0) <= (volunteerLoads[curr.id] || 0) ? prev : curr
+  );
+};
+
 // ============ TOOL: MATCH ============
 const matchTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
   const matched = [...state.issues];
@@ -439,11 +463,17 @@ const matchTool = async (state: AgentState): Promise<{ state: AgentState; confid
           continue;
         }
 
+        // Find backup volunteer (different from primary)
+        const backupVol = findBackupVolunteer(volunteer.id, matched[idx], state.volunteers, volunteerLoads);
+        const backupInfo = backupVol
+          ? ` | Backup: ${backupVol.name} (${backupVol.skills?.join(', ')})`
+          : ' | No backup available';
+
         console.log('[Matching] Assigning issue', idx, 'to', volunteer.name);
         matched[idx] = {
           ...matched[idx],
           assigned_volunteer_id: volunteer.id,
-          assignment_reason: item.assignment_reason || `Gemini matched ${volunteer.name}`,
+          assignment_reason: `${item.assignment_reason || `Matched ${volunteer.name}`}${backupInfo}`,
           status: 'assigned',
         };
 
@@ -482,12 +512,18 @@ const matchTool = async (state: AgentState): Promise<{ state: AgentState; confid
         (volunteerLoads[prev.id] || 0) <= (volunteerLoads[curr.id] || 0) ? prev : curr
       );
 
+      // Find backup volunteer (different from primary)
+      const backupVol = findBackupVolunteer(best.id, issue, state.volunteers, volunteerLoads);
+      const backupInfo = backupVol
+        ? ` | Backup: ${backupVol.name}`
+        : ' | No backup available';
+
       console.log('[Matching] Assigning issue', idx, 'to', best.name, '(fallback)');
       if (idx >= 0) {
         matched[idx] = {
           ...matched[idx],
           assigned_volunteer_id: best.id,
-          assignment_reason: `Matched: ${best.name} (${issue.sector} skill, load: ${volunteerLoads[best.id]}/${best.availability_hours_per_week}hrs)`,
+          assignment_reason: `Matched: ${best.name} (${issue.sector} skill, load: ${volunteerLoads[best.id]}/${best.availability_hours_per_week}hrs)${backupInfo}`,
           status: 'assigned',
         };
       }

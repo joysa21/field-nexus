@@ -96,9 +96,30 @@ export default function ActionPlan() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIssues([]);
+        setVolunteers([]);
+        setLastRun(null);
+        setAssignedCounts({});
+        return;
+      }
+
       const [issuesRes, volRes, runsRes] = await Promise.all([
-        supabase.from("issues").select("*").order("priority_score", { ascending: false }).limit(10),
-        supabase.from("volunteers").select("id, name, skills, zone").eq("is_active", true),
+        supabase
+          .from("issues")
+          .select("*")
+          .eq("ngo_user_id", user.id)
+          .order("priority_score", { ascending: false })
+          .limit(10),
+        supabase
+          .from("volunteers")
+          .select("id, name, skills, zone")
+          .eq("ngo_user_id", user.id)
+          .eq("is_active", true),
         supabase.from("agent_runs").select("*").order("run_at", { ascending: false }).limit(1),
       ]);
       setIssues(issuesRes.data || []);

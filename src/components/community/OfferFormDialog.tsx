@@ -32,14 +32,14 @@ export interface OfferFormValues {
 }
 
 const INITIAL_STATE: OfferFormValues = {
-  title: "",
-  description: "",
-  skills: "",
-  availability: "",
-  preferredCauses: "",
-  location: "",
+  title: "Community Outreach Support Offer",
+  description: "We can support local NGOs with outreach, beneficiary registration, and simple campaign coordination for short-term community programs.",
+  skills: "community outreach, event coordination, documentation",
+  availability: "Weekends and weekday evenings",
+  preferredCauses: "Healthcare Outreach, Education Support",
+  location: "Delhi",
   mode: "remote",
-  contactMethod: "",
+  contactMethod: "Email: hello@demo-volunteer.org",
 };
 
 interface OfferFormDialogProps {
@@ -76,7 +76,9 @@ export function OfferFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="secondary">{triggerLabel || t("offerForm.triggerLabel")}</Button>
+        <Button className="bg-black text-white hover:bg-zinc-800 hover:text-white">
+          {triggerLabel || t("offerForm.triggerLabel")}
+        </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>

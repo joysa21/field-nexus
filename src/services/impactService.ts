@@ -408,8 +408,11 @@ export async function ensureProfileForCurrentUser(role: UserRole, displayName: s
     .upsert(
       {
         id: user.id,
+        email: user.email || `${user.id}@example.org`,
+        user_type: role,
         role,
         display_name: displayName || user.email?.split("@")[0] || "User",
+        full_name: displayName || user.email?.split("@")[0] || "User",
         contact_info: user.email || null,
       },
       { onConflict: "id" },
@@ -522,24 +525,29 @@ export async function createNgoRequest(payload: {
   skillsNeeded: string;
   deadline?: string;
   contactMethod: string;
-}) {
+}): Promise<{ id: string }> {
   const user = await getCurrentSessionUser();
   if (!user) throw new Error("Please sign in first.");
 
-  const { error } = await supabase.from("ngo_requests").insert({
-    owner_id: user.id,
-    title: payload.title,
-    description: payload.description,
-    category: payload.category,
-    urgency: payload.urgency,
-    location: payload.location,
-    volunteers_needed: payload.volunteersNeeded,
-    skills_needed: splitList(payload.skillsNeeded),
-    deadline: payload.deadline || null,
-    contact_method: payload.contactMethod,
-  });
+  const { data, error } = await supabase
+    .from("ngo_requests")
+    .insert({
+      owner_id: user.id,
+      title: payload.title,
+      description: payload.description,
+      category: payload.category,
+      urgency: payload.urgency,
+      location: payload.location,
+      volunteers_needed: payload.volunteersNeeded,
+      skills_needed: splitList(payload.skillsNeeded),
+      deadline: payload.deadline || null,
+      contact_method: payload.contactMethod,
+    })
+    .select("id")
+    .single();
 
   if (error) throw error;
+  return data;
 }
 
 export async function updateNgoRequest(
@@ -562,6 +570,16 @@ export async function updateNgoRequest(
 }
 
 export async function deleteNgoRequest(id: string) {
+  const [connectionsResult, commentsResult, savesResult] = await Promise.all([
+    supabase.from("connections_or_responses").delete().eq("request_id", id),
+    supabase.from("post_comments").delete().eq("request_id", id),
+    supabase.from("saved_posts").delete().eq("request_id", id),
+  ]);
+
+  if (connectionsResult.error) throw connectionsResult.error;
+  if (commentsResult.error) throw commentsResult.error;
+  if (savesResult.error) throw savesResult.error;
+
   const { error } = await supabase.from("ngo_requests").delete().eq("id", id);
   if (error) throw error;
 }
@@ -575,23 +593,28 @@ export async function createVolunteerOffer(payload: {
   location: string;
   mode: "remote" | "on_ground" | "hybrid";
   contactMethod: string;
-}) {
+}): Promise<{ id: string }> {
   const user = await getCurrentSessionUser();
   if (!user) throw new Error("Please sign in first.");
 
-  const { error } = await supabase.from("volunteer_offers").insert({
-    owner_id: user.id,
-    title: payload.title,
-    description: payload.description,
-    skills: splitList(payload.skills),
-    availability: payload.availability,
-    preferred_causes: splitList(payload.preferredCauses),
-    location: payload.location,
-    mode: payload.mode,
-    contact_method: payload.contactMethod,
-  });
+  const { data, error } = await supabase
+    .from("volunteer_offers")
+    .insert({
+      owner_id: user.id,
+      title: payload.title,
+      description: payload.description,
+      skills: splitList(payload.skills),
+      availability: payload.availability,
+      preferred_causes: splitList(payload.preferredCauses),
+      location: payload.location,
+      mode: payload.mode,
+      contact_method: payload.contactMethod,
+    })
+    .select("id")
+    .single();
 
   if (error) throw error;
+  return data;
 }
 
 export async function updateVolunteerOffer(
@@ -613,6 +636,16 @@ export async function updateVolunteerOffer(
 }
 
 export async function deleteVolunteerOffer(id: string) {
+  const [connectionsResult, commentsResult, savesResult] = await Promise.all([
+    supabase.from("connections_or_responses").delete().eq("offer_id", id),
+    supabase.from("post_comments").delete().eq("offer_id", id),
+    supabase.from("saved_posts").delete().eq("offer_id", id),
+  ]);
+
+  if (connectionsResult.error) throw connectionsResult.error;
+  if (commentsResult.error) throw commentsResult.error;
+  if (savesResult.error) throw savesResult.error;
+
   const { error } = await supabase.from("volunteer_offers").delete().eq("id", id);
   if (error) throw error;
 }

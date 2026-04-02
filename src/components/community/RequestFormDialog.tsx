@@ -33,15 +33,15 @@ export interface RequestFormValues {
 }
 
 const INITIAL_STATE: RequestFormValues = {
-  title: "",
-  description: "",
-  category: "",
+  title: "Rain Relief Coordination Needed",
+  description: "We need help coordinating volunteers, distributing supplies, and managing a temporary relief desk for families affected by heavy rains.",
+  category: "Disaster Relief",
   urgency: "medium",
-  location: "",
-  volunteersNeeded: 1,
-  skillsNeeded: "",
-  deadline: "",
-  contactMethod: "",
+  location: "Pune",
+  volunteersNeeded: 8,
+  skillsNeeded: "crowd coordination, logistics, first aid",
+  deadline: "2026-04-12",
+  contactMethod: "Email: relief@demo-ngo.org",
 };
 
 interface RequestFormDialogProps {

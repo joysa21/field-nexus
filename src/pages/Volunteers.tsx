@@ -99,9 +99,29 @@ export default function Volunteers() {
 
   const fetchData = async () => {
     setLoading(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setVolunteers(DIRECTORY_VOLUNTEER_FALLBACK);
+      setAssignedCounts({});
+      setLoading(false);
+      return;
+    }
+
     const [volRes, issuesRes] = await Promise.all([
-      supabase.from("volunteers").select("*").order("created_at", { ascending: false }),
-      supabase.from("issues").select("assigned_volunteer_id").not("assigned_volunteer_id", "is", null),
+      supabase
+        .from("volunteers")
+        .select("*")
+        .eq("ngo_user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("issues")
+        .select("assigned_volunteer_id")
+        .eq("ngo_user_id", user.id)
+        .not("assigned_volunteer_id", "is", null),
     ]);
     const fetched = (volRes.data || []) as Volunteer[];
     setVolunteers(fetched.length > 0 ? fetched : DIRECTORY_VOLUNTEER_FALLBACK);
@@ -121,7 +141,18 @@ export default function Volunteers() {
       return;
     }
     setSaving(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast.error("Please sign in first.");
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase.from("volunteers").insert({
+      ngo_user_id: user.id,
       name: form.name,
       email: form.email || null,
       phone: form.phone || null,
@@ -143,7 +174,22 @@ export default function Volunteers() {
 
   const handleSeed = async () => {
     setSeeding(true);
-    const { error } = await supabase.from("volunteers").insert(DEMO_VOLUNTEERS);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast.error("Please sign in first.");
+      setSeeding(false);
+      return;
+    }
+
+    const demoVolunteers = DEMO_VOLUNTEERS.map((volunteer) => ({
+      ...volunteer,
+      ngo_user_id: user.id,
+    }));
+
+    const { error } = await supabase.from("volunteers").insert(demoVolunteers);
     if (error) toast.error(t("volunteers.seedFailed", { message: error.message }));
     else { toast.success(t("volunteers.sampleAdded")); await fetchData(); }
     setSeeding(false);

@@ -7,6 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { CommunityFilter } from "@/types/impact";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PostFiltersProps {
   value: CommunityFilter;
@@ -14,48 +15,50 @@ interface PostFiltersProps {
 }
 
 export function PostFilters({ value, onChange }: PostFiltersProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="grid gap-3 md:grid-cols-5">
       <Input
-        placeholder="Search title or description"
+        placeholder={t("community.searchPlaceholder")}
         value={value.query}
         onChange={(e) => onChange({ ...value, query: e.target.value })}
       />
 
       <Select value={value.feedType} onValueChange={(feedType: CommunityFilter["feedType"]) => onChange({ ...value, feedType })}>
         <SelectTrigger>
-          <SelectValue placeholder="Feed type" />
+          <SelectValue placeholder={t("community.feedType")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All posts</SelectItem>
-          <SelectItem value="ngo_request">NGO requests</SelectItem>
-          <SelectItem value="volunteer_offer">Volunteer offers</SelectItem>
+          <SelectItem value="all">{t("community.allPosts")}</SelectItem>
+          <SelectItem value="ngo_request">{t("community.ngoRequests")}</SelectItem>
+          <SelectItem value="volunteer_offer">{t("community.volunteerOffers")}</SelectItem>
         </SelectContent>
       </Select>
 
       <Input
-        placeholder="Category"
+        placeholder={t("community.category")}
         value={value.category}
         onChange={(e) => onChange({ ...value, category: e.target.value })}
       />
 
       <Input
-        placeholder="Location"
+        placeholder={t("community.location")}
         value={value.location}
         onChange={(e) => onChange({ ...value, location: e.target.value })}
       />
 
       <Select value={value.urgency} onValueChange={(urgency) => onChange({ ...value, urgency })}>
         <SelectTrigger>
-          <SelectValue placeholder="Urgency" />
+          <SelectValue placeholder={t("community.urgency")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All urgency</SelectItem>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="critical">Critical</SelectItem>
-          <SelectItem value="normal">Normal</SelectItem>
+          <SelectItem value="all">{t("community.allUrgency")}</SelectItem>
+          <SelectItem value="low">{t("community.low")}</SelectItem>
+          <SelectItem value="medium">{t("community.medium")}</SelectItem>
+          <SelectItem value="high">{t("community.high")}</SelectItem>
+          <SelectItem value="critical">{t("community.critical")}</SelectItem>
+          <SelectItem value="normal">{t("community.normal")}</SelectItem>
         </SelectContent>
       </Select>
     </div>

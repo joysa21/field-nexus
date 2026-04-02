@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface OfferFormValues {
   title: string;
@@ -52,6 +53,7 @@ export function OfferFormDialog({
   triggerLabel = "New Offer",
   title = "Create Volunteer Offer",
 }: OfferFormDialogProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState<OfferFormValues>(INITIAL_STATE);
@@ -74,42 +76,40 @@ export function OfferFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="secondary">{triggerLabel}</Button>
+        <Button variant="secondary">{triggerLabel || t("offerForm.triggerLabel")}</Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            Share your availability and skills so NGOs can connect quickly.
-          </DialogDescription>
+          <DialogTitle>{title || t("offerForm.title")}</DialogTitle>
+          <DialogDescription>{t("offerForm.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-2">
-          <Input placeholder="Title" value={values.title} onChange={(e) => update("title", e.target.value)} />
-          <Input placeholder="Location" value={values.location} onChange={(e) => update("location", e.target.value)} />
-          <Textarea className="md:col-span-2" placeholder="Description" value={values.description} onChange={(e) => update("description", e.target.value)} />
-          <Input placeholder="Skills (comma separated)" value={values.skills} onChange={(e) => update("skills", e.target.value)} />
-          <Input placeholder="Availability" value={values.availability} onChange={(e) => update("availability", e.target.value)} />
-          <Input className="md:col-span-2" placeholder="Preferred causes (comma separated)" value={values.preferredCauses} onChange={(e) => update("preferredCauses", e.target.value)} />
+          <Input placeholder={t("offerForm.titleField")} value={values.title} onChange={(e) => update("title", e.target.value)} />
+          <Input placeholder={t("offerForm.locationField")} value={values.location} onChange={(e) => update("location", e.target.value)} />
+          <Textarea className="md:col-span-2" placeholder={t("offerForm.descriptionField")} value={values.description} onChange={(e) => update("description", e.target.value)} />
+          <Input placeholder={t("offerForm.skillsField")} value={values.skills} onChange={(e) => update("skills", e.target.value)} />
+          <Input placeholder={t("offerForm.availabilityField")} value={values.availability} onChange={(e) => update("availability", e.target.value)} />
+          <Input className="md:col-span-2" placeholder={t("offerForm.preferredCausesField")} value={values.preferredCauses} onChange={(e) => update("preferredCauses", e.target.value)} />
 
           <Select value={values.mode} onValueChange={(value: OfferFormValues["mode"]) => update("mode", value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Remote or on-ground" />
+              <SelectValue placeholder={t("offerForm.modeField")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="remote">Remote</SelectItem>
-              <SelectItem value="on_ground">On-ground</SelectItem>
-              <SelectItem value="hybrid">Hybrid</SelectItem>
+              <SelectItem value="remote">{t("offerForm.remote")}</SelectItem>
+              <SelectItem value="on_ground">{t("offerForm.onGround")}</SelectItem>
+              <SelectItem value="hybrid">{t("offerForm.hybrid")}</SelectItem>
             </SelectContent>
           </Select>
 
-          <Input placeholder="Contact method" value={values.contactMethod} onChange={(e) => update("contactMethod", e.target.value)} />
+          <Input placeholder={t("offerForm.contactMethodField")} value={values.contactMethod} onChange={(e) => update("contactMethod", e.target.value)} />
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>{t("offerForm.cancel")}</Button>
           <Button onClick={submit} disabled={saving || !values.title || !values.description}>
-            {saving ? "Saving..." : "Publish Offer"}
+            {saving ? t("offerForm.saving") : t("offerForm.publish")}
           </Button>
         </DialogFooter>
       </DialogContent>

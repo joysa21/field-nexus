@@ -8,13 +8,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = {
+  email: string;
+  password: string;
+};
 
 interface LoginFormProps {
   userType: "individual" | "ngo";
@@ -24,6 +23,12 @@ interface LoginFormProps {
 export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { t } = useLanguage();
+
+  const loginSchema = z.object({
+    email: z.string().email(t("auth.loginFailed")),
+    password: z.string().min(6, t("auth.loginFailed")),
+  });
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -43,10 +48,10 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
         return;
       }
 
-      toast.success("Welcome back!");
+      toast.success(t("auth.welcomeBack"));
       onSuccess();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Login failed. Please try again.");
+      toast.error(error instanceof Error ? error.message : t("auth.loginFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -60,11 +65,11 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>{t("auth.email")}</FormLabel>
               <FormControl>
                 <Input
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder={t("auth.emailPlaceholder")}
                   {...field}
                   disabled={isLoading}
                   className="bg-background"
@@ -80,11 +85,11 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>{t("auth.password")}</FormLabel>
               <FormControl>
                 <Input
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder={t("auth.passwordPlaceholder")}
                   {...field}
                   disabled={isLoading}
                   className="bg-background"
@@ -99,10 +104,10 @@ export default function LoginForm({ userType, onSuccess }: LoginFormProps) {
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Signing in...
+              {t("auth.signingIn")}
             </>
           ) : (
-            "Sign In"
+            t("auth.signIn")
           )}
         </Button>
       </form>

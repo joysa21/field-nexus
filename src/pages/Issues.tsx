@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MapPin, Users } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatDateTime, translateSector, translateStatus } from "@/lib/i18n";
 
 interface Issue {
   id: string;
@@ -119,6 +121,7 @@ export default function Issues() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("priority");
   const [loading, setLoading] = useState(true);
+  const { language, t } = useLanguage();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -152,52 +155,52 @@ export default function Issues() {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Issues</h1>
-        <p className="text-muted-foreground text-sm mt-1">{filtered.length} issues found</p>
+        <h1 className="text-2xl font-bold">{t("issues.title")}</h1>
+        <p className="text-muted-foreground text-sm mt-1">{t("issues.found", { count: filtered.length })}</p>
       </div>
 
       {/* Filters */}
       <div className="flex gap-3">
         <Select value={sectorFilter} onValueChange={setSectorFilter}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Sector" />
+            <SelectValue placeholder={t("issues.sector")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Sectors</SelectItem>
+            <SelectItem value="all">{t("issues.allSectors")}</SelectItem>
             {sectors.map((s) => (
-              <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+              <SelectItem key={s} value={s}>{translateSector(language, s)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("issues.status")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
+            <SelectItem value="all">{t("issues.allStatuses")}</SelectItem>
+            <SelectItem value="unassigned">{translateStatus(language, "unassigned")}</SelectItem>
+            <SelectItem value="assigned">{translateStatus(language, "assigned")}</SelectItem>
+            <SelectItem value="resolved">{translateStatus(language, "resolved")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Sort by" />
+            <SelectValue placeholder={t("issues.sortBy")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="priority">Priority Score ↓</SelectItem>
-            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="priority">{t("issues.priorityScoreDesc")}</SelectItem>
+            <SelectItem value="newest">{t("issues.newestFirst")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Grid */}
       {loading ? (
-        <div className="text-center text-muted-foreground py-16">Loading issues…</div>
+        <div className="text-center text-muted-foreground py-16">{t("issues.loading")}</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 space-y-2">
-          <p className="text-muted-foreground text-sm">No issues yet.</p>
-          <p className="text-muted-foreground/60 text-xs">Run the agents to extract issues from a field report.</p>
+          <p className="text-muted-foreground text-sm">{t("issues.noIssuesYet")}</p>
+          <p className="text-muted-foreground/60 text-xs">{t("issues.runAgentsHint")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
@@ -207,10 +210,10 @@ export default function Issues() {
               <div key={issue.id} className="bg-card border rounded-lg p-4 space-y-3 hover:shadow-sm transition-shadow">
                 <div className="flex items-start justify-between gap-2">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${SECTOR_COLORS[issue.sector || ""] || "bg-muted text-muted-foreground border-border"}`}>
-                    {issue.sector || "other"}
+                    {translateSector(language, issue.sector || "other")}
                   </span>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[issue.status || "unassigned"] || STATUS_COLORS.unassigned}`}>
-                    {issue.status || "unassigned"}
+                    {translateStatus(language, issue.status || "unassigned")}
                   </span>
                 </div>
 
@@ -228,7 +231,7 @@ export default function Issues() {
                       )}
                       {issue.affected_count && (
                         <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" /> {issue.affected_count.toLocaleString()} affected
+                          <Users className="w-3 h-3" /> {t("issues.affected", { count: issue.affected_count.toLocaleString() })}
                         </span>
                       )}
                     </div>

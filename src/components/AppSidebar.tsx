@@ -14,6 +14,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   LayoutDashboard,
   Play,
@@ -29,14 +30,14 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Run Agents", url: "/run", icon: Play, accent: true },
-  { title: "Issues", url: "/issues", icon: ListChecks },
-  { title: "Volunteers", url: "/volunteers", icon: Users },
-  { title: "Action Plan", url: "/action-plan", icon: FileText },
-  { title: "Agent Logs", url: "/logs", icon: Terminal },
-  { title: "Community Connections", url: "/community", icon: MessageSquare },
-  { title: "Saved", url: "/saved", icon: Bookmark },
+  { labelKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
+  { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
+  { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
+  { labelKey: "nav.volunteers", url: "/volunteers", icon: Users },
+  { labelKey: "nav.actionPlan", url: "/action-plan", icon: FileText },
+  { labelKey: "nav.agentLogs", url: "/logs", icon: Terminal },
+  { labelKey: "nav.community", url: "/community", icon: MessageSquare },
+  { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
 ];
 
 export function AppSidebar() {
@@ -45,6 +46,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const handleLogout = async () => {
     await logout();
@@ -60,8 +62,8 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div>
-              <h1 className="text-sidebar-primary font-bold text-base leading-tight">Sahayak</h1>
-              <p className="text-sidebar-foreground/40 text-[10px] leading-tight">NGO coordination workspace</p>
+              <h1 className="text-sidebar-primary font-bold text-base leading-tight">{t("sidebar.organization")}</h1>
+              <p className="text-sidebar-foreground/40 text-[10px] leading-tight">{t("sidebar.subtitle")}</p>
             </div>
           )}
         </div>
@@ -72,12 +74,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
+                const label = t(item.labelKey);
                 const isActive = item.url === "/"
                   ? location.pathname === "/"
                   : location.pathname.startsWith(item.url);
                 return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                  <SidebarMenuItem key={label}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
                       <NavLink
                         to={item.url}
                         end={item.url === "/"}
@@ -91,7 +94,7 @@ export function AppSidebar() {
                         <item.icon
                           className={`w-4 h-4 flex-shrink-0 ${item.accent && !isActive ? "text-sidebar-primary" : ""}`}
                         />
-                        {!collapsed && <span className="text-sm">{item.title}</span>}
+                        {!collapsed && <span className="text-sm">{label}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -121,7 +124,7 @@ export function AppSidebar() {
             className="w-full justify-start text-xs"
           >
             <LogOut className="w-3 h-3 mr-2" />
-            Logout
+            {t("common.logout")}
           </Button>
         )}
         
@@ -131,7 +134,7 @@ export function AppSidebar() {
             size="sm"
             onClick={handleLogout}
             className="w-full"
-            title="Logout"
+            title={t("common.logout")}
           >
             <LogOut className="w-4 h-4" />
           </Button>

@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [userType, setUserType] = useState<"individual" | "ngo">("individual");
   const returnTo = (location.state as { from?: string } | null)?.from ?? "/";
@@ -29,72 +32,71 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo/Brand Section */}
+      <div className="w-full max-w-md space-y-4">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">FieldNexus</h1>
-          <p className="text-muted-foreground">Connecting aid with those who need it most</p>
+          <h1 className="text-4xl font-bold text-primary mb-2">{t("app.brand")}</h1>
+          <p className="text-muted-foreground">{t("auth.connectAid")}</p>
         </div>
 
-        {/* Main Card */}
         <Card className="border-0 shadow-lg">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Welcome</CardTitle>
+            <CardTitle className="text-2xl">{t("auth.title")}</CardTitle>
             <CardDescription>
-              {activeTab === "login" && "Sign in to your account"}
-              {activeTab === "register" && "Create a new account"}
+              {activeTab === "login" && t("auth.signInSubtitle")}
+              {activeTab === "register" && t("auth.registerSubtitle")}
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "login" | "register")}>
               <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+                <TabsTrigger value="login">{t("auth.login")}</TabsTrigger>
+                <TabsTrigger value="register">{t("auth.register")}</TabsTrigger>
               </TabsList>
 
-              {/* Login Tab */}
               <TabsContent value="login" className="space-y-4">
                 <div className="space-y-4 mb-6">
-                  <p className="text-sm font-medium text-foreground">Login as</p>
+                  <p className="text-sm font-medium text-foreground">{t("auth.loginAs")}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <Button
                       variant={userType === "individual" ? "default" : "outline"}
                       onClick={() => setUserType("individual")}
                       className="w-full"
                     >
-                      Individual
+                      {t("auth.individual")}
                     </Button>
                     <Button
                       variant={userType === "ngo" ? "default" : "outline"}
                       onClick={() => setUserType("ngo")}
                       className="w-full"
                     >
-                      NGO
+                      {t("auth.ngo")}
                     </Button>
                   </div>
                 </div>
                 <LoginForm userType={userType} onSuccess={handleLoginSuccess} />
               </TabsContent>
 
-              {/* Register Tab */}
               <TabsContent value="register" className="space-y-4">
                 <div className="space-y-4 mb-6">
-                  <p className="text-sm font-medium text-foreground">Register as</p>
+                  <p className="text-sm font-medium text-foreground">{t("auth.registerAs")}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <Button
                       variant={userType === "individual" ? "default" : "outline"}
                       onClick={() => setUserType("individual")}
                       className="w-full"
                     >
-                      Individual
+                      {t("auth.individual")}
                     </Button>
                     <Button
                       variant={userType === "ngo" ? "default" : "outline"}
                       onClick={() => setUserType("ngo")}
                       className="w-full"
                     >
-                      NGO
+                      {t("auth.ngo")}
                     </Button>
                   </div>
                 </div>
@@ -104,9 +106,8 @@ export default function Auth() {
           </CardContent>
         </Card>
 
-        {/* Footer Info */}
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>Together we can make a difference</p>
+          <p>{t("auth.together")}</p>
         </div>
       </div>
     </div>

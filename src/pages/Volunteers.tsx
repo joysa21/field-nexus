@@ -15,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, UserPlus } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { translateSkill } from "@/lib/i18n";
 
 interface Volunteer {
   id: string;
@@ -93,6 +95,7 @@ export default function Volunteers() {
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const { language, t } = useLanguage();
 
   const fetchData = async () => {
     setLoading(true);
@@ -114,7 +117,7 @@ export default function Volunteers() {
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.zone.trim()) {
-      toast.error("Name and Zone are required.");
+      toast.error(t("volunteers.nameRequired"));
       return;
     }
     setSaving(true);
@@ -128,9 +131,9 @@ export default function Volunteers() {
       is_active: form.is_active,
     });
     if (error) {
-      toast.error("Failed to save: " + error.message);
+      toast.error(t("volunteers.saveFailed", { message: error.message }));
     } else {
-      toast.success("Volunteer added!");
+      toast.success(t("volunteers.added"));
       setForm(defaultForm);
       setOpen(false);
       await fetchData();
@@ -141,8 +144,8 @@ export default function Volunteers() {
   const handleSeed = async () => {
     setSeeding(true);
     const { error } = await supabase.from("volunteers").insert(DEMO_VOLUNTEERS);
-    if (error) toast.error("Seed failed: " + error.message);
-    else { toast.success("5 sample volunteers added!"); await fetchData(); }
+    if (error) toast.error(t("volunteers.seedFailed", { message: error.message }));
+    else { toast.success(t("volunteers.sampleAdded")); await fetchData(); }
     setSeeding(false);
   };
 
@@ -157,65 +160,65 @@ export default function Volunteers() {
     <div className="p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Volunteers</h1>
-          <p className="text-muted-foreground text-sm mt-1">{volunteers.length} registered</p>
+          <h1 className="text-2xl font-bold">{t("volunteers.title")}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t("volunteers.registered", { count: volunteers.length })}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleSeed} disabled={seeding}>
-            {seeding ? "Seeding…" : "Seed Sample Volunteers"}
+            {seeding ? t("volunteers.seeding") : t("volunteers.seedSampleVolunteers")}
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2">
-                <Plus className="w-4 h-4" /> Add Volunteer
+                <Plus className="w-4 h-4" /> {t("volunteers.addVolunteer")}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <UserPlus className="w-4 h-4" /> Add Volunteer
+                  <UserPlus className="w-4 h-4" /> {t("volunteers.addVolunteer")}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Name *</Label>
-                    <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Full name" />
+                    <Label>{t("volunteers.nameRequired")}</Label>
+                    <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={t("auth.fullName")} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Zone *</Label>
+                    <Label>{t("volunteers.zone")}</Label>
                     <Input value={form.zone} onChange={(e) => setForm((f) => ({ ...f, zone: e.target.value }))} placeholder="e.g. North" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Email</Label>
+                    <Label>{t("volunteers.email")}</Label>
                     <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@org.com" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Phone</Label>
+                    <Label>{t("volunteers.phone")}</Label>
                     <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+1 234 567 890" />
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Availability (hrs/week)</Label>
+                  <Label>{t("volunteers.availability")}</Label>
                   <Input type="number" min={1} max={80} value={form.availability_hours_per_week} onChange={(e) => setForm((f) => ({ ...f, availability_hours_per_week: +e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Skills</Label>
+                  <Label>{t("volunteers.skillLabel")}</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {ALL_SKILLS.map((skill) => (
                       <label key={skill} className="flex items-center gap-2 text-sm cursor-pointer">
                         <Checkbox checked={form.skills.includes(skill)} onCheckedChange={() => toggleSkill(skill)} />
-                        <span className="capitalize">{skill}</span>
+                        <span className="capitalize">{translateSkill(language, skill)}</span>
                       </label>
                     ))}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Switch checked={form.is_active} onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))} />
-                  <Label>Active</Label>
+                  <Label>{t("volunteers.activeToggle")}</Label>
                 </div>
                 <Button className="w-full" onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving…" : "Save Volunteer"}
+                  {saving ? t("common.loading") : t("volunteers.saveVolunteer")}
                 </Button>
               </div>
             </DialogContent>
@@ -224,10 +227,10 @@ export default function Volunteers() {
       </div>
 
       {loading ? (
-        <div className="text-center text-muted-foreground py-16">Loading…</div>
+        <div className="text-center text-muted-foreground py-16">{t("volunteers.loading")}</div>
       ) : volunteers.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground text-sm">
-          No volunteers yet. Add one or seed sample data.
+          {t("volunteers.noVolunteersYet")}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
@@ -239,20 +242,20 @@ export default function Volunteers() {
                   <p className="text-xs text-muted-foreground">{v.zone || "—"}</p>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.is_active ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                  {v.is_active ? "Active" : "Inactive"}
+                  {v.is_active ? t("volunteers.active") : t("volunteers.inactive")}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {(v.skills || []).map((skill) => (
                   <span key={skill} className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${SKILL_COLORS[skill] || "bg-muted text-muted-foreground"}`}>
-                    {skill}
+                    {translateSkill(language, skill)}
                   </span>
                 ))}
-                {(!v.skills || v.skills.length === 0) && <span className="text-xs text-muted-foreground">No skills listed</span>}
+                {(!v.skills || v.skills.length === 0) && <span className="text-xs text-muted-foreground">{t("volunteers.noSkillsListed")}</span>}
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{v.availability_hours_per_week || 10} hrs/week</span>
-                <span>{assignedCounts[v.id] || 0} assigned issues</span>
+                <span>{t("volunteers.hoursPerWeek", { hours: v.availability_hours_per_week || 10 })}</span>
+                <span>{t("volunteers.assignedIssues", { count: assignedCounts[v.id] || 0 })}</span>
               </div>
             </div>
           ))}

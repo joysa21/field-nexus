@@ -8,6 +8,7 @@ import { OfferFormDialog, type OfferFormValues } from "@/components/community/Of
 import { Badge } from "@/components/ui/badge";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import type { CommunityFilter, CommunityPost } from "@/types/impact";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   addConnection,
   createNgoRequest,
@@ -33,6 +34,7 @@ const INITIAL_FILTER: CommunityFilter = {
 
 export default function Community() {
   const { profile, userId } = useAuthProfile();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
@@ -51,7 +53,7 @@ export default function Community() {
       setSavedKeys(new Set(saved.map((post) => `${post.postType}:${post.id}`)));
       setRecommended(suggestions);
     } catch (error: any) {
-      toast.error(error.message || "Could not load community feed.");
+      toast.error(error.message || t("community.couldNotLoad"));
     } finally {
       setLoading(false);
     }
@@ -97,8 +99,8 @@ export default function Community() {
 
     const message = window.prompt(
       post.postType === "ngo_request"
-        ? "Write a short message to offer help"
-        : "Write a short message to connect with this volunteer",
+        ? t("community.responsePromptNgo")
+        : t("community.responsePromptVolunteer"),
     );
 
     if (!message) return;
@@ -110,36 +112,36 @@ export default function Community() {
         receiverId: post.ownerId,
         message,
       });
-      toast.success("Response sent.");
+      toast.success(t("community.responseSent"));
     } catch (error: any) {
-      toast.error(error.message || "Could not send response.");
+      toast.error(error.message || t("community.couldNotSendResponse"));
     }
   };
 
   const handleCreateRequest = async (values: RequestFormValues) => {
     try {
       await createNgoRequest(values);
-      toast.success("Request created.");
+      toast.success(t("community.createRequestSuccess"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not create request.");
+      toast.error(error.message || t("community.couldNotCreateRequest"));
     }
   };
 
   const handleCreateOffer = async (values: OfferFormValues) => {
     try {
       await createVolunteerOffer(values);
-      toast.success("Offer created.");
+      toast.success(t("community.createOfferSuccess"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not create offer.");
+      toast.error(error.message || t("community.couldNotCreateOffer"));
     }
   };
 
   const handleEdit = async (post: CommunityPost) => {
-    const title = window.prompt("Edit title", post.title);
+    const title = window.prompt(t("community.editTitle"), post.title);
     if (!title) return;
-    const description = window.prompt("Edit description", post.description);
+    const description = window.prompt(t("community.editDescription"), post.description);
     if (!description) return;
 
     try {
@@ -148,10 +150,10 @@ export default function Community() {
       } else {
         await updateVolunteerOffer(post.id, { title, description });
       }
-      toast.success("Post updated.");
+      toast.success(t("community.updatePostSuccess"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not update post.");
+      toast.error(error.message || t("community.couldNotUpdatePost"));
     }
   };
 
@@ -162,15 +164,15 @@ export default function Community() {
       } else {
         await updateVolunteerOffer(post.id, { status: "unavailable" });
       }
-      toast.success("Status updated.");
+      toast.success(t("community.updateStatusSuccess"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not update status.");
+      toast.error(error.message || t("community.couldNotUpdateStatus"));
     }
   };
 
   const handleDelete = async (post: CommunityPost) => {
-    const confirmed = window.confirm("Delete this post?");
+    const confirmed = window.confirm(t("community.deleteConfirm"));
     if (!confirmed) return;
 
     try {
@@ -179,10 +181,10 @@ export default function Community() {
       } else {
         await deleteVolunteerOffer(post.id);
       }
-      toast.success("Post deleted.");
+      toast.success(t("community.deletePostSuccess"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not delete post.");
+      toast.error(error.message || t("community.couldNotDeletePost"));
     }
   };
 
@@ -198,18 +200,18 @@ export default function Community() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Community Connections</h1>
-          <p className="text-sm text-muted-foreground mt-1">NGOs needing help, volunteer offers, and public collaboration feed.</p>
+          <h1 className="text-2xl font-bold">{t("community.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("community.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
-          {profile?.role === "ngo" && <RequestFormDialog onSubmit={handleCreateRequest} />}
-          {profile?.role === "individual" && <OfferFormDialog onSubmit={handleCreateOffer} />}
+          {profile?.role === "ngo" && <RequestFormDialog onSubmit={handleCreateRequest} triggerLabel={t("community.newRequest")} title={t("community.createRequest")} />}
+          {profile?.role === "individual" && <OfferFormDialog onSubmit={handleCreateOffer} triggerLabel={t("community.newOffer")} title={t("community.createOffer")} />}
         </div>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Filters</CardTitle>
+          <CardTitle className="text-base">{t("community.filters")}</CardTitle>
         </CardHeader>
         <CardContent>
           <PostFilters value={filter} onChange={setFilter} />
@@ -218,11 +220,11 @@ export default function Community() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Recommended for you</CardTitle>
+          <CardTitle className="text-base">{t("community.recommendedForYou")}</CardTitle>
         </CardHeader>
         <CardContent>
           {recommended.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recommendations yet. Complete your profile to improve matches.</p>
+            <p className="text-sm text-muted-foreground">{t("community.noRecommendations")}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {recommended.map((item) => (
@@ -238,11 +240,11 @@ export default function Community() {
       <div className="space-y-4">
         {loading ? (
           <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">Loading community posts...</CardContent>
+            <CardContent className="py-10 text-center text-muted-foreground">{t("community.loadingPosts")}</CardContent>
           </Card>
         ) : filtered.length === 0 ? (
           <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">No posts match your filters.</CardContent>
+            <CardContent className="py-10 text-center text-muted-foreground">{t("community.noPostsMatch")}</CardContent>
           </Card>
         ) : (
           filtered.map((post) => {

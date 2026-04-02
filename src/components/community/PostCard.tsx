@@ -4,6 +4,8 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { MapPin, MessageSquare, Bookmark, Handshake } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { CommunityPost } from "@/types/impact";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatDateTime, translateLabel, translatePostType, translateRole, translateStatus, translateUrgency } from "@/lib/i18n";
 
 interface PostCardProps {
   post: CommunityPost;
@@ -33,21 +35,23 @@ export function PostCard({
   onDelete,
   onMarkClosed,
 }: PostCardProps) {
+  const { language, t } = useLanguage();
+
   return (
     <Card className="border-border/70">
       <CardHeader className="space-y-2 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Badge variant={roleTone[post.ownerRole]}>{post.ownerRole === "ngo" ? "NGO" : "Individual"}</Badge>
-              <Badge variant="outline">{post.postType === "ngo_request" ? "Request" : "Offer"}</Badge>
-              <Badge variant="outline">{post.status}</Badge>
+              <Badge variant={roleTone[post.ownerRole]}>{translateRole(language, post.ownerRole)}</Badge>
+              <Badge variant="outline">{translatePostType(language, post.postType)}</Badge>
+              <Badge variant="outline">{translateStatus(language, post.status)}</Badge>
             </div>
             <h3 className="text-base font-semibold mt-2 leading-tight">{post.title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">Posted by {post.ownerName}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("community.postedBy", { name: post.ownerName })}</p>
           </div>
           <div className="text-xs text-muted-foreground whitespace-nowrap">
-            {new Date(post.createdAt).toLocaleString()}
+            {formatDateTime(language, post.createdAt)}
           </div>
         </div>
       </CardHeader>
@@ -55,8 +59,8 @@ export function PostCard({
       <CardContent className="space-y-3 pt-2">
         <p className="text-sm text-foreground whitespace-pre-wrap">{post.description}</p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">{post.category}</Badge>
-          <Badge variant="outline">Urgency: {post.urgency}</Badge>
+          <Badge variant="outline">{translateLabel(language, post.category)}</Badge>
+          <Badge variant="outline">{t("community.urgencyLabel", { value: translateUrgency(language, post.urgency) })}</Badge>
           <span className="inline-flex items-center gap-1">
             <MapPin className="h-3.5 w-3.5" />
             {post.location}
@@ -68,7 +72,7 @@ export function PostCard({
         <Button asChild variant="ghost" size="sm">
           <Link to={`/community/${post.postType}/${post.id}`} className="inline-flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
-            Discussion
+            {t("community.discussion")}
           </Link>
         </Button>
 
@@ -77,9 +81,9 @@ export function PostCard({
             <>
               <Button variant="outline" size="sm" onClick={() => onEdit?.(post)}>Edit</Button>
               <Button variant="outline" size="sm" onClick={() => onMarkClosed?.(post)}>
-                {post.postType === "ngo_request" ? "Mark Fulfilled" : "Mark Unavailable"}
+                {post.postType === "ngo_request" ? t("community.markFulfilled") : t("community.markUnavailable")}
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => onDelete?.(post)}>Delete</Button>
+              <Button variant="destructive" size="sm" onClick={() => onDelete?.(post)}>{t("common.delete")}</Button>
             </>
           )}
           <Button
@@ -88,12 +92,12 @@ export function PostCard({
             onClick={() => onSave?.(post)}
           >
             <Bookmark className="h-4 w-4 mr-1" />
-            {isSaved ? "Saved" : "Save"}
+            {isSaved ? t("community.saved") : t("community.save")}
           </Button>
           {(post.postType === "ngo_request" ? !isOwner : canRespond) && (
             <Button size="sm" onClick={() => onRespond?.(post)}>
               <Handshake className="h-4 w-4 mr-1" />
-              {post.postType === "ngo_request" ? "Help this NGO" : "Connect"}
+              {post.postType === "ngo_request" ? t("community.helpNgo") : t("community.connect")}
             </Button>
           )}
         </div>

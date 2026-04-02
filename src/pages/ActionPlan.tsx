@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/table";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Printer, AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatDateTime, translateLabel, translateSector, translateStatus } from "@/lib/i18n";
 
 interface Issue {
   id: string;
@@ -90,6 +92,7 @@ export default function ActionPlan() {
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
   const [assignedCounts, setAssignedCounts] = useState<Record<string, number>>({});
+  const { language, t } = useLanguage();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -163,24 +166,30 @@ export default function ActionPlan() {
       const backupVolunteer = scoredCandidates[1] || null;
 
       const matchedSkillsText = recommendedVolunteer?.matchedSkills.length
-        ? `matches ${recommendedVolunteer.matchedSkills.join(", ")}`
-        : `best available for ${issue.sector || "other"}`;
+        ? (language === "hi"
+          ? `मेल खाते कौशल: ${recommendedVolunteer.matchedSkills.map((skill) => translateLabel(language, skill)).join(", ")}`
+          : `matches ${recommendedVolunteer.matchedSkills.join(", ")}`)
+        : (language === "hi"
+          ? `${translateSector(language, issue.sector || "other")} के लिए सर्वोत्तम उपलब्ध`
+          : `best available for ${issue.sector || "other"}`);
       const loadText = recommendedVolunteer
         ? recommendedVolunteer.currentLoad > 0
-          ? `${recommendedVolunteer.currentLoad} active issue${recommendedVolunteer.currentLoad === 1 ? "" : "s"}`
-          : "light workload"
-        : "no active volunteer available";
+          ? (language === "hi"
+            ? `${recommendedVolunteer.currentLoad} सक्रिय समस्या${recommendedVolunteer.currentLoad === 1 ? "" : "एँ"}`
+            : `${recommendedVolunteer.currentLoad} active issue${recommendedVolunteer.currentLoad === 1 ? "" : "s"}`)
+          : (language === "hi" ? "हल्का कार्यभार" : "light workload")
+        : (language === "hi" ? "कोई सक्रिय स्वयंसेवक उपलब्ध नहीं" : "no active volunteer available");
 
       return {
         issue,
         assignedVolunteer,
         recommendedVolunteer,
         backupVolunteer,
-        matchLabel: assignedVolunteer ? "Assigned" : recommendedVolunteer ? "Suggested" : "Unmatched",
+        matchLabel: assignedVolunteer ? t("actionPlan.assigned") : recommendedVolunteer ? t("actionPlan.suggestedLabel") : t("actionPlan.unmatched"),
         matchReason: `${matchedSkillsText} • ${loadText}`,
       };
     });
-  }, [assignedCounts, issues, volunteers]);
+  }, [assignedCounts, issues, volunteers, language, t]);
 
   const getRecommendedVolunteer = (issueId: string | null) =>
     issueMatches.find((match) => match.issue.id === issueId);

@@ -15,6 +15,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Individual Registration Schema
 const individualRegisterSchema = z.object({
@@ -57,8 +58,11 @@ const NGO_TYPES = [
 export default function RegisterForm({ userType, onSuccess }: RegisterFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
+  const { t } = useLanguage();
 
-  const schema = userType === "individual" ? individualRegisterSchema : ngoRegisterSchema;
+  const schema = userType === "individual"
+    ? individualRegisterSchema
+    : ngoRegisterSchema;
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: userType === "individual" ? {
@@ -100,15 +104,15 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
       }
 
       if (result.needsEmailVerification) {
-        toast.success("Account created. Please verify your email, then sign in.");
+        toast.success(t("auth.accountCreatedNeedsVerification"));
         onSuccess();
         return;
       }
 
-      toast.success(`Welcome, ${displayName}! Account created successfully.`);
+      toast.success(t("auth.welcomeUser", { name: displayName }) + ` ${t("auth.accountCreated")}`);
       onSuccess();
     } catch (error) {
-      toast.error("Registration failed. Please try again.");
+      toast.error(t("auth.registrationFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -329,10 +333,10 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating account...
+              {t("auth.createAccount")}
             </>
           ) : (
-            "Create Account"
+            t("auth.createAccount")
           )}
         </Button>
       </form>

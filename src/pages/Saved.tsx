@@ -4,10 +4,12 @@ import { toast } from "sonner";
 import { getSavedPosts, savePost, unsavePost } from "@/services/impactService";
 import { PostCard } from "@/components/community/PostCard";
 import type { CommunityPost } from "@/types/impact";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Saved() {
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const { t } = useLanguage();
 
   const refresh = async () => {
     setLoading(true);
@@ -15,7 +17,7 @@ export default function Saved() {
       const data = await getSavedPosts();
       setPosts(data);
     } catch (error: any) {
-      toast.error(error.message || "Could not load saved posts.");
+      toast.error(error.message || t("community.noPostsMatch"));
     } finally {
       setLoading(false);
     }
@@ -28,7 +30,7 @@ export default function Saved() {
   const toggleSave = async (post: CommunityPost) => {
     try {
       await unsavePost(post.postType, post.id);
-      toast.success("Removed from saved posts.");
+      toast.success(t("community.saved"));
       refresh();
     } catch {
       await savePost(post.postType, post.id);
@@ -39,14 +41,14 @@ export default function Saved() {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Saved Posts</h1>
-        <p className="text-sm text-muted-foreground mt-1">Your bookmarked requests and volunteer offers.</p>
+        <h1 className="text-2xl font-bold">{t("nav.saved")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t("community.subtitle")}</p>
       </div>
 
       {loading ? (
-        <Card><CardContent className="py-8 text-center text-muted-foreground">Loading saved posts...</CardContent></Card>
+        <Card><CardContent className="py-8 text-center text-muted-foreground">{t("common.loadingDots")}</CardContent></Card>
       ) : posts.length === 0 ? (
-        <Card><CardContent className="py-8 text-center text-muted-foreground">You have no saved posts yet.</CardContent></Card>
+        <Card><CardContent className="py-8 text-center text-muted-foreground">{t("community.noPostsMatch")}</CardContent></Card>
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (

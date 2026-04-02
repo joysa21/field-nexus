@@ -7,15 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { CheckCircle, Circle, Loader2, SkipForward, ArrowRight } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatTime } from "@/lib/i18n";
 
 const STEPS = [
-  { key: "ingestion", label: "Ingestion Agent", description: "Detecting input type" },
-  { key: "extraction", label: "Extraction Agent", description: "Parsing issues with AI" },
-  { key: "scoring", label: "Scoring Agent", description: "Computing priority scores" },
-  { key: "gap_detection", label: "Gap Detection Agent", description: "Checking volunteer coverage" },
-  { key: "matching", label: "Matching Agent", description: "Assigning volunteers" },
-  { key: "reallocation", label: "Reallocation Agent", description: "Rebalancing workload" },
-  { key: "complete", label: "Report Agent", description: "Generating action plan" },
+  { key: "ingestion", labelKey: "runAgents.ingestion", descriptionKey: "runAgents.detectingInput" },
+  { key: "extraction", labelKey: "runAgents.extraction", descriptionKey: "runAgents.parsingIssues" },
+  { key: "scoring", labelKey: "runAgents.scoring", descriptionKey: "runAgents.computingScores" },
+  { key: "gap_detection", labelKey: "runAgents.gapDetection", descriptionKey: "runAgents.checkingCoverage" },
+  { key: "matching", labelKey: "runAgents.matching", descriptionKey: "runAgents.assigningVolunteers" },
+  { key: "reallocation", labelKey: "runAgents.reallocation", descriptionKey: "runAgents.rebalancing" },
+  { key: "complete", labelKey: "runAgents.report", descriptionKey: "runAgents.generatingPlan" },
 ];
 
 const STEP_ORDER = STEPS.map((s) => s.key);
@@ -34,16 +36,12 @@ function getStepStatus(stepKey: string, currentStep: string, isComplete: boolean
   return "waiting";
 }
 
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
 export default function RunAgents() {
   const [rawInput, setRawInput] = useState("");
   const [running, setRunning] = useState(false);
   const [agentState, setAgentState] = useState<AgentState | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     if (consoleRef.current) {
@@ -53,7 +51,7 @@ export default function RunAgents() {
 
   const handleRun = async () => {
     if (!rawInput.trim()) {
-      toast.error("Please paste a field report first.");
+      toast.error(t("runAgents.pasteReportFirst"));
       return;
     }
     setRunning(true);
@@ -82,9 +80,9 @@ export default function RunAgents() {
         if (issuesErr) throw issuesErr;
       }
 
-      toast.success(`Pipeline complete — ${finalState.issues.length} issues processed`);
+      toast.success(t("runAgents.pipelineComplete", { count: finalState.issues.length }));
     } catch (e: any) {
-      toast.error("Pipeline error: " + e.message);
+      toast.error(t("runAgents.pipelineError", { message: e.message }));
     } finally {
       setRunning(false);
     }
@@ -97,26 +95,26 @@ export default function RunAgents() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Run Agents</h1>
-        <p className="text-muted-foreground text-sm mt-1">Paste a field report and let the pipeline extract & prioritize issues</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("nav.runAgents")}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t("runAgents.subtitle")}</p>
       </div>
 
       {/* Input */}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div>
-            <label className="text-sm font-medium text-foreground mb-2 block">Paste field report here</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">{t("runAgents.pasteReport")}</label>
             <Textarea
               value={rawInput}
               onChange={(e) => setRawInput(e.target.value)}
-              placeholder="e.g. Village of Rampur has had no clean water for 6 days, affecting ~200 families. The local health clinic is out of medicines..."
+              placeholder={t("runAgents.placeholder")}
               className="min-h-[140px] resize-none font-mono text-sm"
               disabled={running}
             />
           </div>
           <Button onClick={handleRun} disabled={running || !rawInput.trim()} className="gap-2">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {running ? "Running pipeline…" : "Run All Agents"}
+            {running ? t("runAgents.running") : t("runAgents.runAll")}
           </Button>
         </CardContent>
       </Card>
@@ -128,7 +126,7 @@ export default function RunAgents() {
           <div className="col-span-2">
             <Card className="h-full">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Pipeline Steps</CardTitle>
+                <CardTitle className="text-sm">{t("runAgents.pipelineSteps")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {STEPS.map((step) => {
@@ -146,10 +144,10 @@ export default function RunAgents() {
                       </div>
                       <div className="min-w-0">
                         <p className={`text-sm font-medium leading-tight ${status === "waiting" || status === "skipped" ? "text-muted-foreground" : "text-foreground"}`}>
-                          {step.label}
+                          {t(step.labelKey)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {status === "skipped" ? "Skipped — no overload" : step.description}
+                          {status === "skipped" ? t("runAgents.skipped") : t(step.descriptionKey)}
                         </p>
                         {status === "done" && log && (
                           <p className="text-xs text-primary mt-1 truncate">{log.decision}</p>
@@ -168,7 +166,7 @@ export default function RunAgents() {
               <CardHeader className="pb-2 bg-[hsl(222,20%,9%)] border-b border-white/5">
                 <CardTitle className="text-xs text-green-400 font-mono flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  Agent Thoughts
+                  {t("runAgents.agentThoughts")}
                 </CardTitle>
               </CardHeader>
               <div
@@ -177,7 +175,7 @@ export default function RunAgents() {
                 style={{ minHeight: 280, maxHeight: 380, background: "#0f1117" }}
               >
                 {agentState.agentLogs.length === 0 ? (
-                  <span className="text-green-400/40">Waiting for agents...</span>
+                  <span className="text-green-400/40">{t("runAgents.waiting")}</span>
                 ) : (
                   agentState.agentLogs.map((log, i) => (
                     <div key={i} className="mb-2">
@@ -203,11 +201,11 @@ export default function RunAgents() {
         <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
           <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
           <p className="text-sm text-foreground flex-1">
-            Pipeline complete — {agentState?.agentLogs.length} agent steps recorded.
+            {t("runAgents.pipelineCompleteSteps", { count: agentState?.agentLogs.length || 0 })}
           </p>
           <Button asChild size="sm" variant="outline" className="gap-2">
             <Link to="/issues">
-              View Issues <ArrowRight className="w-3 h-3" />
+              {t("runAgents.viewIssues")} <ArrowRight className="w-3 h-3" />
             </Link>
           </Button>
         </div>

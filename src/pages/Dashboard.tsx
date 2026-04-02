@@ -13,6 +13,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { AlertTriangle, Users, ListChecks, Unlink } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { translateSector } from "@/lib/i18n";
 
 const DEMO_VOLUNTEERS = [
   { name: "Anita Sharma", email: "anita@example.org", zone: "Delhi", skills: ["counseling", "healthcare"], availability_hours_per_week: 8, is_active: true },
@@ -44,6 +46,7 @@ export default function Dashboard() {
   const [sectorData, setSectorData] = useState<SectorData[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const { language, t } = useLanguage();
 
   const fetchStats = async () => {
     setLoading(true);
@@ -93,31 +96,36 @@ export default function Dashboard() {
       if (vErr) throw vErr;
       const { error: iErr } = await supabase.from("issues").insert(DEMO_ISSUES);
       if (iErr) throw iErr;
-      toast.success("Demo data loaded — 3 volunteers & 4 issues added!");
+      toast.success(t("dashboard.demoLoaded"));
       await fetchStats();
     } catch (e: any) {
-      toast.error("Failed to load demo data: " + e.message);
+      toast.error(t("dashboard.demoLoadFailed", { message: e.message }));
     } finally {
       setSeeding(false);
     }
   };
 
   const statCards = [
-    { label: "Total Issues", value: stats.totalIssues, icon: ListChecks, color: "text-primary" },
-    { label: "Critical Issues", value: stats.criticalIssues, icon: AlertTriangle, color: "text-destructive" },
-    { label: "Active Volunteers", value: stats.activeVolunteers, icon: Users, color: "text-blue-600" },
-    { label: "Unassigned Issues", value: stats.unassignedIssues, icon: Unlink, color: "text-amber-500" },
+    { label: t("dashboard.totalIssues"), value: stats.totalIssues, icon: ListChecks, color: "text-primary" },
+    { label: t("dashboard.criticalIssues"), value: stats.criticalIssues, icon: AlertTriangle, color: "text-destructive" },
+    { label: t("dashboard.activeVolunteers"), value: stats.activeVolunteers, icon: Users, color: "text-blue-600" },
+    { label: t("dashboard.unassignedIssues"), value: stats.unassignedIssues, icon: Unlink, color: "text-amber-500" },
   ];
+
+  const localizedSectorData = sectorData.map(({ sector, count }) => ({
+    sector: translateSector(language, sector),
+    count,
+  }));
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Field coordination overview</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("dashboard.title")}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t("dashboard.subtitle")}</p>
         </div>
         <Button onClick={loadDemoData} disabled={seeding} variant="outline" size="sm">
-          {seeding ? "Loading…" : "Load Demo Data"}
+          {seeding ? t("dashboard.loadingDemoData") : t("dashboard.loadDemoData")}
         </Button>
       </div>
 
@@ -143,16 +151,16 @@ export default function Dashboard() {
       {/* Sector bar chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Issues by Sector</CardTitle>
+          <CardTitle className="text-base">{t("dashboard.issuesBySector")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {sectorData.length === 0 ? (
+          {localizedSectorData.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
-              No issues yet. Load demo data or run the agents.
+              {t("dashboard.noIssuesYet")}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={sectorData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <BarChart data={localizedSectorData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="sector"

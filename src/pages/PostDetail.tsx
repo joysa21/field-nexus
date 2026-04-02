@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { addComment, getComments, getCommunityFeed } from "@/services/impactService";
 import type { CommunityPost, CommunityPostType } from "@/types/impact";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatDateTime, translatePostType, translateRole, translateStatus } from "@/lib/i18n";
 
 interface EnrichedComment {
   id: string;
@@ -19,6 +21,7 @@ interface EnrichedComment {
 export default function PostDetail() {
   const { type, id } = useParams();
   const postType = type as CommunityPostType;
+  const { language, t } = useLanguage();
 
   const [post, setPost] = useState<CommunityPost | null>(null);
   const [comments, setComments] = useState<EnrichedComment[]>([]);
@@ -37,7 +40,7 @@ export default function PostDetail() {
       setPost(feed.find((item) => item.id === id && item.postType === postType) || null);
       setComments(items as EnrichedComment[]);
     } catch (error: any) {
-      toast.error(error.message || "Could not load post details.");
+      toast.error(error.message || t("postDetail.couldNotLoad"));
     } finally {
       setLoading(false);
     }
@@ -54,10 +57,10 @@ export default function PostDetail() {
     try {
       await addComment(postType, id, commentText.trim());
       setCommentText("");
-      toast.success("Comment added.");
+      toast.success(t("postDetail.commentAdded"));
       await refresh();
     } catch (error: any) {
-      toast.error(error.message || "Could not add comment.");
+      toast.error(error.message || t("postDetail.couldNotComment"));
     }
   };
 
@@ -65,7 +68,7 @@ export default function PostDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">Loading...</CardContent>
+          <CardContent className="py-10 text-center text-muted-foreground">{t("postDetail.loading")}</CardContent>
         </Card>
       </div>
     );
@@ -75,7 +78,7 @@ export default function PostDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">Post not found.</CardContent>
+          <CardContent className="py-10 text-center text-muted-foreground">{t("postDetail.postNotFound")}</CardContent>
         </Card>
       </div>
     );
@@ -86,13 +89,13 @@ export default function PostDetail() {
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{post.postType === "ngo_request" ? "NGO Request" : "Volunteer Offer"}</Badge>
-            <Badge variant="outline">{post.status}</Badge>
+            <Badge>{translatePostType(language, post.postType)}</Badge>
+            <Badge variant="outline">{translateStatus(language, post.status)}</Badge>
             <Badge variant="outline">{post.category}</Badge>
           </div>
           <CardTitle className="text-xl">{post.title}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            {post.ownerName} · {post.location} · {new Date(post.createdAt).toLocaleString()}
+            {post.ownerName} · {post.location} · {formatDateTime(language, post.createdAt)}
           </p>
         </CardHeader>
         <CardContent>
@@ -102,28 +105,28 @@ export default function PostDetail() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Discussion</CardTitle>
+          <CardTitle className="text-base">{t("postDetail.discussion")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <form className="space-y-2" onSubmit={submitComment}>
             <Textarea
-              placeholder="Write a comment"
+              placeholder={t("postDetail.writeComment")}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
             />
-            <Button type="submit">Post Comment</Button>
+            <Button type="submit">{t("postDetail.postComment")}</Button>
           </form>
 
           <div className="space-y-2">
             {comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No comments yet.</p>
+              <p className="text-sm text-muted-foreground">{t("postDetail.noCommentsYet")}</p>
             ) : (
               comments.map((comment) => (
                 <div key={comment.id} className="border rounded-md p-3">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{comment.author_name}</p>
-                    <Badge variant="outline">{comment.author_role}</Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(comment.created_at).toLocaleString()}</span>
+                    <Badge variant="outline">{translateRole(language, comment.author_role)}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDateTime(language, comment.created_at)}</span>
                   </div>
                   <p className="text-sm mt-1 whitespace-pre-wrap">{comment.content}</p>
                 </div>

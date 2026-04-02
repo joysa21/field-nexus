@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,6 +22,7 @@ interface ForgotPasswordFormProps {
 export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const { t } = useLanguage();
 
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
@@ -36,7 +38,7 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      toast.success("Check your email for password reset instructions");
+      toast.success(t("auth.checkEmailForReset"));
       setIsSubmitted(true);
       
       // Auto redirect after 3 seconds
@@ -45,7 +47,7 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
         setIsSubmitted(false);
       }, 3000);
     } catch (error) {
-      toast.error("Failed to process request. Please try again.");
+      toast.error(t("auth.passwordResetFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -57,12 +59,12 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
         <div className="mb-4 p-3 bg-green-50 rounded-full">
           <CheckCircle2 className="w-8 h-8 text-green-600" />
         </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">Check your email</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">{t("auth.checkEmailForReset")}</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          We've sent password reset instructions to your email address
+          {t("auth.resetInstructionsSent")}
         </p>
         <Button onClick={onBack} variant="outline" className="w-full">
-          Back to Login
+          {t("auth.backToLogin")}
         </Button>
       </div>
     );
@@ -74,7 +76,7 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 text-sm">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-amber-800">
-            Enter the email associated with your account
+            {t("auth.enterAssociatedEmail")}
           </p>
         </div>
 
@@ -83,7 +85,7 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email Address</FormLabel>
+              <FormLabel>{t("auth.email")}</FormLabel>
               <FormControl>
                 <Input
                   type="email"
@@ -107,16 +109,16 @@ export default function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) 
             disabled={isLoading}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            {t("common.cancel")}
           </Button>
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Sending...
+                {t("auth.sending")}
               </>
             ) : (
-              "Send Reset Link"
+              t("auth.sendResetLink")
             )}
           </Button>
         </div>

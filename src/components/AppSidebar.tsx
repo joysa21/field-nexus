@@ -19,7 +19,6 @@ import {
   Play,
   ListChecks,
   Users,
-  Bell,
   Bookmark,
   MessageSquare,
   FileText,
@@ -38,7 +37,6 @@ const navItems = [
   { title: "Agent Logs", url: "/logs", icon: Terminal },
   { title: "Community Connections", url: "/community", icon: MessageSquare },
   { title: "Saved", url: "/saved", icon: Bookmark },
-  { title: "Notifications", url: "/notifications", icon: Bell },
 ];
 
 export function AppSidebar() {

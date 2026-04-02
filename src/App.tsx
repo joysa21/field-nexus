@@ -15,7 +15,6 @@ import ActionPlan from "./pages/ActionPlan";
 import AgentLogs from "./pages/AgentLogs";
 import Community from "./pages/Community";
 import Saved from "./pages/Saved";
-import Notifications from "./pages/Notifications";
 import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
 
@@ -41,7 +40,6 @@ const App = () => (
               <Route path="/community" element={<Community />} />
               <Route path="/community/:type/:id" element={<PostDetail />} />
               <Route path="/saved" element={<Saved />} />
-              <Route path="/notifications" element={<Notifications />} />
               <Route path="/run" element={<RunAgents />} />
               <Route path="/issues" element={<Issues />} />
               <Route path="/volunteers" element={<Volunteers />} />

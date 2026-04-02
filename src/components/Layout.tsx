@@ -1,7 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { NotificationBell } from "@/components/community/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,7 +30,6 @@ export default function Layout() {
           <header className="h-12 flex items-center justify-between border-b bg-background px-4 no-print">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
             <div className="flex items-center gap-2">
-              {isAuthenticated && <NotificationBell />}
               {isAuthenticated && (
                 <Button size="sm" variant="outline" onClick={signOut}>Sign out</Button>
               )}

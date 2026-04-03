@@ -5,7 +5,7 @@ type TranslationValue = string | Record<string, TranslationValue>;
 const translations: Record<Language, Record<string, TranslationValue>> = {
   en: {
     app: {
-      brand: "FieldNexus",
+      brand: "Sahayak",
       tagline: "Connecting aid with those who need it most",
       footer: "Together we can make a difference",
       workspaceTagline: "NGO coordination workspace",
@@ -375,7 +375,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
   },
   hi: {
     app: {
-      brand: "फील्डनेक्सस",
+      brand: "सहायक",
       tagline: "सहायता को उन लोगों से जोड़ना जिन्हें इसकी सबसे अधिक आवश्यकता है",
       footer: "साथ मिलकर हम बदलाव ला सकते हैं",
       workspaceTagline: "एनजीओ समन्वय कार्यक्षेत्र",

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   BarChart,
@@ -15,19 +14,6 @@ import {
 import { AlertTriangle, Users, ListChecks, Unlink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateSector } from "@/lib/i18n";
-
-const DEMO_VOLUNTEERS = [
-  { name: "Anita Sharma", email: "anita@example.org", zone: "Delhi", skills: ["counseling", "healthcare"], availability_hours_per_week: 8, is_active: true },
-  { name: "Rohan Mehta", email: "rohan@example.org", zone: "Mumbai", skills: ["education", "logistics"], availability_hours_per_week: 12, is_active: true },
-  { name: "Meera Iyer", email: "meera@example.org", zone: "Bengaluru", skills: ["community outreach", "content creation"], availability_hours_per_week: 10, is_active: true },
-];
-
-const DEMO_ISSUES = [
-  { issue_summary: "Drinking water shortage in Rampur for 5 days. Immediate tanker support needed.", sector: "water", location: "Rampur", affected_count: 220, priority_score: 9.1, urgency_score: 9.3, status: "unassigned" },
-  { issue_summary: "Primary health center in Meerut is low on antibiotics and first-aid supplies.", sector: "healthcare", location: "Meerut", affected_count: 480, priority_score: 8.4, urgency_score: 8.8, status: "assigned" },
-  { issue_summary: "Flood-affected families in Dibrugarh need temporary shelter kits and dry food.", sector: "shelter", location: "Dibrugarh", affected_count: 75, priority_score: 8.9, urgency_score: 9.1, status: "unassigned" },
-  { issue_summary: "School sanitation units in Kharagpur are damaged and require urgent repairs.", sector: "sanitation", location: "Kharagpur", affected_count: 160, priority_score: 7.2, urgency_score: 7.8, status: "resolved" },
-];
 
 interface Stats {
   totalIssues: number;
@@ -45,7 +31,6 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({ totalIssues: 0, criticalIssues: 0, activeVolunteers: 0, unassignedIssues: 0 });
   const [sectorData, setSectorData] = useState<SectorData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
   const { language, t } = useLanguage();
 
   const fetchStats = async () => {
@@ -91,41 +76,6 @@ export default function Dashboard() {
   };
 
   useEffect(() => { fetchStats(); }, []);
-
-  const loadDemoData = async () => {
-    setSeeding(true);
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast.error("Please sign in first.");
-        return;
-      }
-
-      const demoVolunteers = DEMO_VOLUNTEERS.map((volunteer) => ({
-        ...volunteer,
-        ngo_user_id: user.id,
-      }));
-
-      const { error: vErr } = await supabase.from("volunteers").insert(demoVolunteers);
-      if (vErr) throw vErr;
-      const demoIssues = DEMO_ISSUES.map((issue) => ({
-        ...issue,
-        ngo_user_id: user.id,
-      }));
-      const { error: iErr } = await supabase.from("issues").insert(demoIssues);
-      if (iErr) throw iErr;
-      toast.success(t("dashboard.demoLoaded"));
-      await fetchStats();
-    } catch (e: any) {
-      toast.error(t("dashboard.demoLoadFailed", { message: e.message }));
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const statCards = [
     { label: t("dashboard.totalIssues"), value: stats.totalIssues, icon: ListChecks, color: "text-primary" },
     { label: t("dashboard.criticalIssues"), value: stats.criticalIssues, icon: AlertTriangle, color: "text-destructive" },
@@ -145,9 +95,6 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground">{t("dashboard.title")}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t("dashboard.subtitle")}</p>
         </div>
-        <Button onClick={loadDemoData} disabled={seeding} variant="outline" size="sm">
-          {seeding ? t("dashboard.loadingDemoData") : t("dashboard.loadDemoData")}
-        </Button>
       </div>
 
       {/* Stat cards */}

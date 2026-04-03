@@ -44,14 +44,6 @@ const SKILL_COLORS: Record<string, string> = {
   counseling: "bg-pink-100 text-pink-700",
 };
 
-const DEMO_VOLUNTEERS = [
-  { name: "Aisha Patel", email: "aisha@ngo.org", zone: "North", skills: ["healthcare", "counseling"], availability_hours_per_week: 20 },
-  { name: "Carlos Rivera", email: "carlos@ngo.org", zone: "South", skills: ["water", "sanitation", "logistics"], availability_hours_per_week: 15 },
-  { name: "Priya Nair", email: "priya@ngo.org", zone: "East", skills: ["education", "food"], availability_hours_per_week: 10 },
-  { name: "James Osei", email: "james@ngo.org", zone: "West", skills: ["electricity", "shelter", "safety"], availability_hours_per_week: 25 },
-  { name: "Fatima Al-Hassan", email: "fatima@ngo.org", zone: "Central", skills: ["healthcare", "food", "logistics"], availability_hours_per_week: 18 },
-];
-
 const DIRECTORY_VOLUNTEER_FALLBACK: Volunteer[] = [
   {
     id: "fallback-vol-1",
@@ -94,7 +86,6 @@ export default function Volunteers() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const { language, t } = useLanguage();
 
   const fetchData = async () => {
@@ -172,29 +163,6 @@ export default function Volunteers() {
     setSaving(false);
   };
 
-  const handleSeed = async () => {
-    setSeeding(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      toast.error("Please sign in first.");
-      setSeeding(false);
-      return;
-    }
-
-    const demoVolunteers = DEMO_VOLUNTEERS.map((volunteer) => ({
-      ...volunteer,
-      ngo_user_id: user.id,
-    }));
-
-    const { error } = await supabase.from("volunteers").insert(demoVolunteers);
-    if (error) toast.error(t("volunteers.seedFailed", { message: error.message }));
-    else { toast.success(t("volunteers.sampleAdded")); await fetchData(); }
-    setSeeding(false);
-  };
-
   const toggleSkill = (skill: string) => {
     setForm((f) => ({
       ...f,
@@ -210,9 +178,6 @@ export default function Volunteers() {
           <p className="text-muted-foreground text-sm mt-1">{t("volunteers.registered", { count: volunteers.length })}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSeed} disabled={seeding}>
-            {seeding ? t("volunteers.seeding") : t("volunteers.seedSampleVolunteers")}
-          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2">

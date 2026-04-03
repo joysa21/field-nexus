@@ -12,6 +12,7 @@ export type Database = {
       agent_runs: {
         Row: {
           id: string;
+          ngo_user_id: string | null;
           run_at: string | null;
           total_issues: number | null;
           total_assigned: number | null;
@@ -20,6 +21,7 @@ export type Database = {
         }
         Insert: {
           id?: string;
+          ngo_user_id?: string | null;
           run_at?: string | null;
           total_issues?: number | null;
           total_assigned?: number | null;
@@ -28,6 +30,7 @@ export type Database = {
         }
         Update: {
           id?: string;
+          ngo_user_id?: string | null;
           run_at?: string | null;
           total_issues?: number | null;
           total_assigned?: number | null;

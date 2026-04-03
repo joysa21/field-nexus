@@ -12,6 +12,15 @@ import {
   updateIndividualProfile,
   updateNgoProfile,
 } from "@/services/impactService";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { Check, X, AlertCircle } from "lucide-react";
 
 export default function Profile() {
   const { userId: routeUserId } = useParams();
@@ -24,6 +33,9 @@ export default function Profile() {
   const [data, setData] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declineDialogId, setDeclineDialogId] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!activeUserId) return;
@@ -44,6 +56,24 @@ export default function Profile() {
         interests: (payload.individualProfile?.interests || []).join(", "),
         availability: payload.individualProfile?.availability || "",
       });
+
+      // Fetch assignments for individual volunteers
+      if (payload.profile.role === "individual" && isOwnProfile) {
+        const { data: volData } = await supabase
+          .from("volunteers")
+          .select("id")
+          .eq("ngo_user_id", activeUserId)
+          .single();
+
+        if (volData?.id) {
+          const { data: issuesData } = await supabase
+            .from("issues")
+            .select("*")
+            .eq("assigned_volunteer_id", volData.id)
+            .order("priority_score", { ascending: false });
+          setAssignments(issuesData || []);
+        }
+      }
     } catch (error: any) {
       toast.error(error.message || "Could not load profile.");
     } finally {
@@ -87,6 +117,43 @@ export default function Profile() {
     }
   };
 
+  const handleAcceptAssignment = async (issueId: string) => {
+    try {
+      const { error } = await supabase
+        .from("issues")
+        .update({ status: "accepted" })
+        .eq("id", issueId);
+
+      if (error) throw error;
+      toast.success("Assignment accepted!");
+      refresh();
+    } catch (error: any) {
+      toast.error("Failed to accept assignment: " + error.message);
+    }
+  };
+
+  const handleDeclineAssignment = async (issueId: string) => {
+    if (!declineReason.trim()) {
+      toast.error("Please provide a reason for declining.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("issues")
+        .update({ status: "declined", assignment_reason: `Declined: ${declineReason}` })
+        .eq("id", issueId);
+
+      if (error) throw error;
+      toast.success("Assignment declined. Reason recorded.");
+      setDeclineReason("");
+      setDeclineDialogId(null);
+      refresh();
+    } catch (error: any) {
+      toast.error("Failed to decline assignment: " + error.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
@@ -115,7 +182,7 @@ export default function Profile() {
               <p className="text-sm text-muted-foreground mt-1">{data.profile.location || "Location not set"}</p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge>{role === "ngo" ? "NGO" : "Individual"}</Badge>
+              <Badge>{role === "ngo" ? "NGO" : "Volunteer"}</Badge>
               <Badge variant="outline">{data.profile.verification_status}</Badge>
             </div>
           </div>
@@ -192,6 +259,108 @@ export default function Profile() {
           </CardContent>
         </Card>
       </div>
+
+      {role === "individual" && isOwnProfile && assignments.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-blue-600" />
+              My Assignments
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">You have {assignments.length} issue(s) assigned to you</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {assignments.map((issue: any) => (
+              <div key={issue.id} className="border rounded-lg p-4 bg-white space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{issue.issue_summary}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Location: {issue.location} • Sector: {issue.sector}
+                    </p>
+                  </div>
+                  <Badge variant={issue.priority_score > 7 ? "destructive" : issue.priority_score > 4 ? "secondary" : "outline"}>
+                    Priority: {issue.priority_score?.toFixed(1) || "—"}
+                  </Badge>
+                </div>
+
+                {issue.status !== "accepted" && issue.status !== "declined" && (
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => handleAcceptAssignment(issue.id)}
+                    >
+                      <Check className="w-3 h-3" /> Accept
+                    </Button>
+                    <Dialog open={declineDialogId === issue.id} onOpenChange={(open) => {
+                      if (!open) {
+                        setDeclineDialogId(null);
+                        setDeclineReason("");
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setDeclineDialogId(issue.id)}
+                        >
+                          <X className="w-3 h-3" /> Decline
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Decline Assignment</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <p className="text-sm text-muted-foreground">Please tell us why you're declining this assignment:</p>
+                          <Textarea
+                            value={declineReason}
+                            onChange={(e) => setDeclineReason(e.target.value)}
+                            placeholder="e.g., Not available, Lack of expertise, Personal reasons..."
+                            className="min-h-24"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              variant="destructive"
+                              onClick={() => handleDeclineAssignment(issue.id)}
+                            >
+                              Confirm Decline
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setDeclineDialogId(null);
+                                setDeclineReason("");
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
+
+                {issue.status === "accepted" && (
+                  <div className="pt-2 border-t">
+                    <Badge variant="default" className="bg-green-600">✓ Accepted</Badge>
+                  </div>
+                )}
+
+                {issue.status === "declined" && (
+                  <div className="pt-2 border-t">
+                    <Badge variant="destructive">Declined</Badge>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

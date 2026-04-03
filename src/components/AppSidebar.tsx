@@ -29,13 +29,19 @@ import {
   User,
 } from "lucide-react";
 
-const navItems = [
+const ngoNavItems = [
   { labelKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
   { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
   { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
   { labelKey: "nav.volunteers", url: "/volunteers", icon: Users },
   { labelKey: "nav.actionPlan", url: "/action-plan", icon: FileText },
   { labelKey: "nav.agentLogs", url: "/logs", icon: Terminal },
+  { labelKey: "nav.community", url: "/community", icon: MessageSquare },
+  { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
+];
+
+const volunteerNavItems = [
+  { labelKey: "nav.volunteerPortal", url: "/volunteer-portal", icon: Users, accent: true },
   { labelKey: "nav.community", url: "/community", icon: MessageSquare },
   { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
 ];
@@ -47,6 +53,7 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const resolvedNavItems = user?.userType === "individual" ? volunteerNavItems : ngoNavItems;
 
   const handleLogout = async () => {
     await logout();
@@ -73,7 +80,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {resolvedNavItems.map((item) => {
                 const label = t(item.labelKey);
                 const isActive = item.url === "/"
                   ? location.pathname === "/"

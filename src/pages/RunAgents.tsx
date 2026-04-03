@@ -136,13 +136,15 @@ export default function RunAgents() {
         (state) => setAgentState({ ...state })
       );
 
-      // Save to Supabase
+      // Save to Supabase with owner id so logs can be scoped per user.
       const { error: runErr } = await supabase.from("agent_runs").insert({
+        ngo_user_id: user.id,
         total_issues: finalState.issues.length,
         total_assigned: finalState.assignments.length,
         alerts: finalState.alerts as any,
         agent_logs: finalState.agentLogs as any,
       });
+
       if (runErr) throw runErr;
 
       if (finalState.issues.length > 0) {

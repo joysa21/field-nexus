@@ -53,7 +53,7 @@ const mapToAppUser = (
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const AUTH_INIT_TIMEOUT_MS = 6000;
+  const AUTH_INIT_TIMEOUT_MS = 12000;
   const AUTH_REQUEST_TIMEOUT_MS = 20000;
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
@@ -120,8 +120,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const sessionUser = data.session?.user;
 
         if (sessionUser) {
-          const profile = await withTimeout(getProfile(sessionUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile");
-          setUser(mapToAppUser(sessionUser, profile));
+          // Set session user immediately so a slow profile query does not block auth initialization.
+          setUser(mapToAppUser(sessionUser, { user_type: sessionUser.user_metadata?.user_type }));
+
+          try {
+            const profile = await withTimeout(getProfile(sessionUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile");
+            setUser(mapToAppUser(sessionUser, profile));
+          } catch (profileError) {
+            console.warn("Profile fetch timed out during init. Using session metadata.", profileError);
+          }
         }
       } catch (error) {
         console.error("Auth initialization failed:", error);

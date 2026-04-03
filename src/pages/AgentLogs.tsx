@@ -98,11 +98,27 @@ export default function AgentLogs() {
   useEffect(() => {
     const fetchRuns = async () => {
       setLoading(true);
-      const { data } = await supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setRuns([]);
+        setLoading(false);
+        return;
+      }
+
+      const withOwnerFilter = await supabase
         .from("agent_runs")
         .select("*")
+        .eq("ngo_user_id", user.id)
         .order("run_at", { ascending: false });
-      setRuns(data || []);
+
+      if (withOwnerFilter.error) {
+        setRuns([]);
+      } else {
+        setRuns(withOwnerFilter.data || []);
+      }
       setLoading(false);
     };
     fetchRuns();

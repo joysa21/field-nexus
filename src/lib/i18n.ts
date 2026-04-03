@@ -12,6 +12,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
     },
     nav: {
       dashboard: "Dashboard",
+      volunteerPortal: "Volunteer Portal",
       runAgents: "Run Agents",
       issues: "Issues",
       volunteers: "Volunteers",
@@ -45,7 +46,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
       register: "Register",
       loginAs: "Login as",
       registerAs: "Register as",
-      individual: "Individual",
+      individual: "Volunteer",
       ngo: "NGO",
       email: "Email",
       password: "Password",
@@ -234,7 +235,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
       request: "Request",
       offer: "Offer",
       ngo: "NGO",
-      individual: "Individual",
+      individual: "Volunteer",
       noNotificationsYet: "No notifications yet.",
     },
     requestForm: {
@@ -382,6 +383,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
     },
     nav: {
       dashboard: "डैशबोर्ड",
+      volunteerPortal: "स्वयंसेवक पोर्टल",
       runAgents: "एजेंट चलाएँ",
       issues: "समस्याएँ",
       volunteers: "स्वयंसेवक",
@@ -415,7 +417,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
       register: "रजिस्टर",
       loginAs: "इस रूप में लॉगिन करें",
       registerAs: "इस रूप में रजिस्टर करें",
-      individual: "व्यक्ति",
+      individual: "स्वयंसेवक",
       ngo: "एनजीओ",
       email: "ईमेल",
       password: "पासवर्ड",
@@ -604,7 +606,7 @@ const translations: Record<Language, Record<string, TranslationValue>> = {
       request: "अनुरोध",
       offer: "प्रस्ताव",
       ngo: "एनजीओ",
-      individual: "व्यक्ति",
+      individual: "स्वयंसेवक",
       noNotificationsYet: "अभी कोई सूचना नहीं है।",
     },
     requestForm: {

@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateSkill } from "@/lib/i18n";
 
@@ -84,7 +84,11 @@ export default function Volunteers() {
   const [assignedCounts, setAssignedCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingVolunteerId, setEditingVolunteerId] = useState<string | null>(null);
+  const [deletingVolunteerId, setDeletingVolunteerId] = useState<string | null>(null);
   const [form, setForm] = useState(defaultForm);
+  const [editForm, setEditForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const { language, t } = useLanguage();
 
@@ -112,6 +116,7 @@ export default function Volunteers() {
         .from("issues")
         .select("assigned_volunteer_id")
         .eq("ngo_user_id", user.id)
+        .neq("status", "resolved")
         .not("assigned_volunteer_id", "is", null),
     ]);
     const fetched = (volRes.data || []) as Volunteer[];
@@ -168,6 +173,75 @@ export default function Volunteers() {
       ...f,
       skills: f.skills.includes(skill) ? f.skills.filter((s) => s !== skill) : [...f.skills, skill],
     }));
+  };
+
+  const toggleEditSkill = (skill: string) => {
+    setEditForm((f) => ({
+      ...f,
+      skills: f.skills.includes(skill) ? f.skills.filter((s) => s !== skill) : [...f.skills, skill],
+    }));
+  };
+
+  const openEditDialog = (volunteer: Volunteer) => {
+    setEditingVolunteerId(volunteer.id);
+    setEditForm({
+      name: volunteer.name || "",
+      email: volunteer.email || "",
+      phone: volunteer.phone || "",
+      zone: volunteer.zone || "",
+      availability_hours_per_week: volunteer.availability_hours_per_week || 10,
+      skills: volunteer.skills || [],
+      is_active: Boolean(volunteer.is_active),
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdateVolunteer = async () => {
+    if (!editingVolunteerId) return;
+    if (!editForm.name.trim() || !editForm.zone.trim()) {
+      toast.error(t("volunteers.nameRequired"));
+      return;
+    }
+
+    setSaving(true);
+    const { error } = await supabase
+      .from("volunteers")
+      .update({
+        name: editForm.name,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        zone: editForm.zone,
+        availability_hours_per_week: editForm.availability_hours_per_week,
+        skills: editForm.skills,
+        is_active: editForm.is_active,
+      })
+      .eq("id", editingVolunteerId);
+
+    if (error) {
+      toast.error(t("volunteers.saveFailed", { message: error.message }));
+    } else {
+      toast.success("Volunteer updated.");
+      setEditOpen(false);
+      setEditingVolunteerId(null);
+      await fetchData();
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteVolunteer = async (volunteerId: string, volunteerName: string) => {
+    const confirmed = window.confirm(`Delete ${volunteerName}? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingVolunteerId(volunteerId);
+    const { error } = await supabase.from("volunteers").delete().eq("id", volunteerId);
+
+    if (error) {
+      toast.error(`Failed to delete volunteer: ${error.message}`);
+    } else {
+      toast.success("Volunteer deleted.");
+      await fetchData();
+    }
+    setDeletingVolunteerId(null);
   };
 
   return (
@@ -234,6 +308,58 @@ export default function Volunteers() {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4" /> Edit Volunteer
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>{t("volunteers.nameRequired")}</Label>
+                    <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} placeholder={t("auth.fullName")} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{t("volunteers.zone")}</Label>
+                    <Input value={editForm.zone} onChange={(e) => setEditForm((f) => ({ ...f, zone: e.target.value }))} placeholder="e.g. North" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{t("volunteers.email")}</Label>
+                    <Input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@org.com" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{t("volunteers.phone")}</Label>
+                    <Input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+1 234 567 890" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>{t("volunteers.availability")}</Label>
+                  <Input type="number" min={1} max={80} value={editForm.availability_hours_per_week} onChange={(e) => setEditForm((f) => ({ ...f, availability_hours_per_week: +e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("volunteers.skillLabel")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ALL_SKILLS.map((skill) => (
+                      <label key={skill} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={editForm.skills.includes(skill)} onCheckedChange={() => toggleEditSkill(skill)} />
+                        <span className="capitalize">{translateSkill(language, skill)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm((f) => ({ ...f, is_active: v }))} />
+                  <Label>{t("volunteers.activeToggle")}</Label>
+                </div>
+                <Button className="w-full" onClick={handleUpdateVolunteer} disabled={saving}>
+                  {saving ? t("common.loading") : "Save Changes"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -247,13 +373,21 @@ export default function Volunteers() {
         <div className="grid grid-cols-3 gap-4">
           {volunteers.map((v) => (
             <div key={v.id} className="bg-card border rounded-lg p-4 space-y-3">
+              {(() => {
+                const totalHours = v.availability_hours_per_week || 10;
+                const assignedTasks = assignedCounts[v.id] || 0;
+                const remainingHours = Math.max(0, totalHours - assignedTasks);
+                const isAvailable = Boolean(v.is_active) && remainingHours > 0;
+
+                return (
+                  <>
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-semibold text-sm text-foreground">{v.name}</p>
                   <p className="text-xs text-muted-foreground">{v.zone || "—"}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.is_active ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                  {v.is_active ? t("volunteers.active") : t("volunteers.inactive")}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isAvailable ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                  {isAvailable ? t("volunteers.active") : "Not Available"}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1">
@@ -264,10 +398,35 @@ export default function Volunteers() {
                 ))}
                 {(!v.skills || v.skills.length === 0) && <span className="text-xs text-muted-foreground">{t("volunteers.noSkillsListed")}</span>}
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{t("volunteers.hoursPerWeek", { hours: v.availability_hours_per_week || 10 })}</span>
-                <span>{t("volunteers.assignedIssues", { count: assignedCounts[v.id] || 0 })}</span>
+              <div className="space-y-2 text-xs border-t pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("volunteers.hoursPerWeek", { hours: totalHours })}</span>
+                  <span className="text-muted-foreground">{t("volunteers.assignedIssues", { count: assignedTasks })}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold bg-muted/50 p-2 rounded">
+                  <span>Remaining Capacity:</span>
+                  <span className={`${remainingHours > 0 ? "text-green-600" : "text-red-600"}`}>
+                    {remainingHours > 0 ? `${remainingHours} hrs` : "Not Available"}
+                  </span>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => openEditDialog(v)}>
+                    <Pencil className="w-3 h-3" /> Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="flex-1 gap-1"
+                    onClick={() => handleDeleteVolunteer(v.id, v.name)}
+                    disabled={deletingVolunteerId === v.id}
+                  >
+                    <Trash2 className="w-3 h-3" /> {deletingVolunteerId === v.id ? "Deleting..." : "Delete"}
+                  </Button>
+                </div>
               </div>
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>

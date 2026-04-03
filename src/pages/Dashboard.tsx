@@ -48,7 +48,11 @@ export default function Dashboard() {
     }
 
     const [issuesRes, volunteersRes] = await Promise.all([
-      supabase.from("issues").select("priority_score, status, sector").eq("ngo_user_id", user.id),
+      supabase
+        .from("issues")
+        .select("priority_score, status, sector")
+        .eq("ngo_user_id", user.id)
+        .neq("status", "resolved"),
       supabase.from("volunteers").select("is_active").eq("ngo_user_id", user.id),
     ]);
 

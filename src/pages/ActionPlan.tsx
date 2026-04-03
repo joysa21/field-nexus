@@ -11,9 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Printer, AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { Printer, AlertCircle, AlertTriangle, Info, Send } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, translateLabel, translateSector, translateStatus } from "@/lib/i18n";
+import { toast } from "sonner";
 
 interface Issue {
   id: string;
@@ -31,6 +32,7 @@ interface Volunteer {
   name: string;
   skills: string[] | null;
   zone: string | null;
+  availability_hours_per_week: number | null;
 }
 
 interface AgentRun {
@@ -85,6 +87,13 @@ interface IssueMatch {
   matchReason: string;
 }
 
+interface VolunteerCapacity {
+  id: string;
+  totalHours: number;
+  usedHours: number;
+  remainingHours: number;
+}
+
 const normalizeValue = (value?: string | null) => value?.toLowerCase().trim() ?? "";
 
 export default function ActionPlan() {
@@ -92,7 +101,124 @@ export default function ActionPlan() {
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [lastRun, setLastRun] = useState<AgentRun | null>(null);
   const [assignedCounts, setAssignedCounts] = useState<Record<string, number>>({});
+  const [volunteerCapacities, setVolunteerCapacities] = useState<Record<string, VolunteerCapacity>>({});
+  const [assigning, setAssigning] = useState(false);
   const { language, t } = useLanguage();
+
+  const computeLoadAndCapacity = (issuesList: Issue[], volunteersList: Volunteer[]) => {
+    const counts: Record<string, number> = {};
+    const capacities: Record<string, VolunteerCapacity> = {};
+
+    volunteersList.forEach((v) => {
+      capacities[v.id] = {
+        id: v.id,
+        totalHours: v.availability_hours_per_week || 10,
+        usedHours: 0,
+        remainingHours: v.availability_hours_per_week || 10,
+      };
+    });
+
+    issuesList.forEach((issue) => {
+      if (!issue.assigned_volunteer_id) return;
+      counts[issue.assigned_volunteer_id] = (counts[issue.assigned_volunteer_id] || 0) + 1;
+    });
+
+    Object.entries(counts).forEach(([volunteerId, taskCount]) => {
+      if (!capacities[volunteerId]) return;
+      capacities[volunteerId].usedHours = taskCount;
+      capacities[volunteerId].remainingHours = Math.max(0, capacities[volunteerId].totalHours - taskCount);
+    });
+
+    setAssignedCounts(counts);
+    setVolunteerCapacities(capacities);
+    return counts;
+  };
+
+  const getRemainingCapacity = (volunteer: Volunteer, currentCounts: Record<string, number>) => {
+    const totalHours = volunteer.availability_hours_per_week || 10;
+    const currentLoad = currentCounts[volunteer.id] || 0;
+    return totalHours - currentLoad;
+  };
+
+  const getBestVolunteerId = (issue: Issue, volunteersList: Volunteer[], currentCounts: Record<string, number>) => {
+    const sectorKey = normalizeValue(issue.sector) || "other";
+    const requiredSkills = SECTOR_SKILL_MATCHES[sectorKey] || [];
+
+    const ranked = volunteersList
+      .map((volunteer) => {
+        const volunteerSkills = (volunteer.skills || []).map(normalizeValue).filter(Boolean);
+        const matchedSkills = requiredSkills.filter((skill) => volunteerSkills.includes(skill));
+        const currentLoad = currentCounts[volunteer.id] || 0;
+
+        let score = matchedSkills.length * 10;
+        if (normalizeValue(issue.sector) && volunteerSkills.includes(normalizeValue(issue.sector))) {
+          score += 12;
+        }
+        if (["water", "food", "shelter", "sanitation"].includes(sectorKey) && volunteerSkills.includes("logistics")) {
+          score += 3;
+        }
+        score -= currentLoad * 1.5;
+
+        return { volunteerId: volunteer.id, score, currentLoad, name: volunteer.name };
+      })
+      .filter((candidate) => {
+        const volunteer = volunteersList.find((vol) => vol.id === candidate.volunteerId);
+        if (!volunteer) return false;
+        return getRemainingCapacity(volunteer, currentCounts) > 0;
+      })
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        if (left.currentLoad !== right.currentLoad) return left.currentLoad - right.currentLoad;
+        return left.name.localeCompare(right.name);
+      });
+
+    return ranked[0]?.volunteerId || null;
+  };
+
+  const autoAssignIssues = async (issuesList: Issue[], volunteersList: Volunteer[]) => {
+    if (!issuesList.length || !volunteersList.length) return issuesList;
+
+    const workingCounts = { ...computeLoadAndCapacity(issuesList, volunteersList) };
+    const updates: Array<{ id: string; assigned_volunteer_id: string; status: string }> = [];
+
+    for (const issue of issuesList) {
+      if (issue.assigned_volunteer_id) continue;
+      const volunteerId = getBestVolunteerId(issue, volunteersList, workingCounts);
+      if (!volunteerId) continue;
+
+      updates.push({ id: issue.id, assigned_volunteer_id: volunteerId, status: "assigned" });
+      workingCounts[volunteerId] = (workingCounts[volunteerId] || 0) + 1;
+    }
+
+    if (updates.length === 0) return issuesList;
+
+    const updateCalls = updates.map((updateItem) =>
+      supabase
+        .from("issues")
+        .update({ assigned_volunteer_id: updateItem.assigned_volunteer_id, status: updateItem.status })
+        .eq("id", updateItem.id)
+    );
+    const results = await Promise.all(updateCalls);
+    const failedUpdate = results.find((result) => result.error);
+    if (failedUpdate?.error) {
+      throw failedUpdate.error;
+    }
+
+    const issueById = new Map(issuesList.map((issue) => [issue.id, issue]));
+    updates.forEach((updateItem) => {
+      const current = issueById.get(updateItem.id);
+      if (!current) return;
+      issueById.set(updateItem.id, {
+        ...current,
+        assigned_volunteer_id: updateItem.assigned_volunteer_id,
+        status: updateItem.status,
+      });
+    });
+
+    const nextIssues = Array.from(issueById.values());
+    computeLoadAndCapacity(nextIssues, volunteersList);
+    return nextIssues;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -113,24 +239,25 @@ export default function ActionPlan() {
           .from("issues")
           .select("*")
           .eq("ngo_user_id", user.id)
+          .neq("status", "resolved")
           .order("priority_score", { ascending: false })
           .limit(10),
         supabase
           .from("volunteers")
-          .select("id, name, skills, zone")
+          .select("id, name, skills, zone, availability_hours_per_week")
           .eq("ngo_user_id", user.id)
           .eq("is_active", true),
         supabase.from("agent_runs").select("*").order("run_at", { ascending: false }).limit(1),
       ]);
-      setIssues(issuesRes.data || []);
-      setVolunteers(volRes.data || []);
+
+      const fetchedIssues = issuesRes.data || [];
+      const fetchedVolunteers = volRes.data || [];
+      setVolunteers(fetchedVolunteers);
       if (runsRes.data && runsRes.data.length > 0) setLastRun(runsRes.data[0]);
 
-      const counts: Record<string, number> = {};
-      (issuesRes.data || []).forEach((i) => {
-        if (i.assigned_volunteer_id) counts[i.assigned_volunteer_id] = (counts[i.assigned_volunteer_id] || 0) + 1;
-      });
-      setAssignedCounts(counts);
+      const autoAssignedIssues = await autoAssignIssues(fetchedIssues, fetchedVolunteers);
+      setIssues(autoAssignedIssues);
+      computeLoadAndCapacity(autoAssignedIssues, fetchedVolunteers);
     };
     fetchData();
   }, []);
@@ -183,8 +310,14 @@ export default function ActionPlan() {
           return left.volunteer.name.localeCompare(right.volunteer.name);
         });
 
-      const recommendedVolunteer = scoredCandidates[0] || null;
-      const backupVolunteer = scoredCandidates[1] || null;
+      const availableCandidates = scoredCandidates.filter((candidate) => {
+        if (assignedVolunteer?.id === candidate.volunteer.id) return true;
+        return getRemainingCapacity(candidate.volunteer, assignedCounts) > 0;
+      });
+
+      const recommendedVolunteer = availableCandidates[0] || null;
+      const bestVolunteerId = assignedVolunteer?.id || recommendedVolunteer?.volunteer.id || null;
+      const backupVolunteer = availableCandidates.find((candidate) => candidate.volunteer.id !== bestVolunteerId) || null;
 
       const matchedSkillsText = recommendedVolunteer?.matchedSkills.length
         ? (language === "hi"
@@ -214,6 +347,64 @@ export default function ActionPlan() {
 
   const getRecommendedVolunteer = (issueId: string | null) =>
     issueMatches.find((match) => match.issue.id === issueId);
+
+  const handleAssignIssue = async (issueId: string, volunteerId: string | null) => {
+    if (!volunteerId) {
+      toast.error("Please select a volunteer to assign.");
+      return;
+    }
+
+    let finalVolunteerId = volunteerId;
+    const selectedVolunteer = volunteers.find((volunteer) => volunteer.id === volunteerId);
+    const selectedRemainingCapacity = selectedVolunteer ? getRemainingCapacity(selectedVolunteer, assignedCounts) : 0;
+
+    if (!selectedVolunteer || selectedRemainingCapacity <= 0) {
+      const issueMatch = issueMatches.find((match) => match.issue.id === issueId);
+      const backupId = issueMatch?.backupVolunteer?.volunteer.id || null;
+
+      if (!backupId) {
+        toast.error("Selected volunteer has no capacity and no backup is available.");
+        return;
+      }
+
+      const backupVolunteer = volunteers.find((volunteer) => volunteer.id === backupId);
+      const backupRemainingCapacity = backupVolunteer ? getRemainingCapacity(backupVolunteer, assignedCounts) : 0;
+      if (!backupVolunteer || backupRemainingCapacity <= 0) {
+        toast.error("Backup volunteer is also at capacity. Please add more volunteers.");
+        return;
+      }
+
+      finalVolunteerId = backupId;
+      toast.info("Primary volunteer is at capacity. Assigned to backup volunteer.");
+    }
+
+    setAssigning(true);
+    try {
+      const { error } = await supabase
+        .from("issues")
+        .update({ assigned_volunteer_id: finalVolunteerId, status: "assigned" })
+        .eq("id", issueId);
+
+      if (error) throw error;
+
+      toast.success("Issue assigned successfully.");
+      // Refresh data
+      const issuesRes = await supabase
+        .from("issues")
+        .select("*")
+        .eq("ngo_user_id", (await supabase.auth.getUser()).data.user?.id)
+        .neq("status", "resolved")
+        .order("priority_score", { ascending: false })
+        .limit(10);
+      setIssues(issuesRes.data || []);
+
+      computeLoadAndCapacity(issuesRes.data || [], volunteers);
+    } catch (e: any) {
+      toast.error("Failed to assign issue: " + e.message);
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const alerts: any[] = lastRun?.alerts || [];
 
@@ -275,23 +466,44 @@ export default function ActionPlan() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md bg-muted/50 p-3">
+                  <div className="rounded-md bg-muted/50 p-3 space-y-2">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Best volunteer</p>
-                    <p className="text-sm font-semibold mt-1">
+                    <p className="text-sm font-semibold">
                       {assignedVolunteer?.name || recommendedVolunteer?.volunteer.name || "No volunteer available"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">{matchReason}</p>
+                    <p className="text-xs text-muted-foreground">{matchReason}</p>
+                    {(assignedVolunteer || recommendedVolunteer) && (
+                      <div className="text-xs text-blue-600 pt-1 border-t border-muted">
+                        <p>Remaining capacity: <span className="font-semibold">{volunteerCapacities[assignedVolunteer?.id || recommendedVolunteer?.volunteer.id]?.remainingHours || 0} hrs/week</span></p>
+                      </div>
+                    )}
                   </div>
-                  <div className="rounded-md bg-muted/50 p-3">
+                  <div className="rounded-md bg-muted/50 p-3 space-y-2">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Backup volunteer</p>
-                    <p className="text-sm font-semibold mt-1">
+                    <p className="text-sm font-semibold">
                       {backupVolunteer?.volunteer.name || "No backup volunteer"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground">
                       {backupVolunteer
                         ? `${(backupVolunteer.volunteer.skills || []).slice(0, 3).join(", ") || "No skills listed"}`
                         : "No alternate match found"}
                     </p>
+                    {backupVolunteer && (
+                      <div className="text-xs text-blue-600 pt-1 border-t border-muted">
+                        <p>Remaining capacity: <span className="font-semibold">{volunteerCapacities[backupVolunteer.volunteer.id]?.remainingHours || 0} hrs/week</span></p>
+                      </div>
+                    )}
+                    {backupVolunteer && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-2 mt-2"
+                        onClick={() => handleAssignIssue(issue.id, backupVolunteer.volunteer.id)}
+                        disabled={assigning}
+                      >
+                        <Send className="w-3 h-3" /> Assign Backup
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -420,20 +632,32 @@ export default function ActionPlan() {
                   <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No active volunteers.</TableCell>
                 </TableRow>
               ) : (
-                volunteers.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell className="font-medium text-sm">{v.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(v.skills || []).map((s) => (
-                          <span key={s} className="text-xs bg-muted px-1.5 py-0.5 rounded capitalize">{s}</span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm font-mono">{assignedCounts[v.id] || 0}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{v.zone || "—"}</TableCell>
-                  </TableRow>
-                ))
+                volunteers.map((v) => {
+                  const capacity = volunteerCapacities[v.id];
+                  return (
+                    <TableRow key={v.id}>
+                      <TableCell className="font-medium text-sm">{v.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(v.skills || []).map((s) => (
+                            <span key={s} className="text-xs bg-muted px-1.5 py-0.5 rounded capitalize">{s}</span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm font-mono">{assignedCounts[v.id] || 0}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <div>
+                          <p>{v.zone || "—"}</p>
+                          {capacity && (
+                            <p className={`mt-1 font-semibold ${capacity.remainingHours > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              Remaining: {capacity.remainingHours} hrs
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

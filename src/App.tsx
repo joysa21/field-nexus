@@ -15,6 +15,7 @@ import Volunteers from "./pages/Volunteers";
 import ActionPlan from "./pages/ActionPlan";
 import AgentLogs from "./pages/AgentLogs";
 import Community from "./pages/Community";
+import VolunteerPortal from "./pages/VolunteerPortal";
 import Saved from "./pages/Saved";
 import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
@@ -41,6 +42,7 @@ const App = () => (
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/community" element={<Community />} />
                 <Route path="/community/:type/:id" element={<PostDetail />} />
+                <Route path="/volunteer-portal" element={<VolunteerPortal />} />
                 <Route path="/saved" element={<Saved />} />
                 <Route path="/run" element={<RunAgents />} />
                 <Route path="/issues" element={<Issues />} />

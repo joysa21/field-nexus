@@ -139,7 +139,11 @@ export default function Issues() {
       }
 
       const [issuesRes, volRes] = await Promise.all([
-        supabase.from("issues").select("*").eq("ngo_user_id", user.id),
+        supabase
+          .from("issues")
+          .select("*")
+          .eq("ngo_user_id", user.id)
+          .neq("status", "resolved"),
         supabase.from("volunteers").select("id, name").eq("ngo_user_id", user.id),
       ]);
 

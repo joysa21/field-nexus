@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [userType, setUserType] = useState<"individual" | "ngo">("individual");
-  const returnTo = (location.state as { from?: string } | null)?.from ?? "/";
+  const returnTo = (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
   if (isAuthenticated) {
     return <Navigate to={returnTo} replace />;
@@ -30,18 +31,33 @@ export default function Auth() {
     setActiveTab("login");
   };
 
+  useEffect(() => {
+    const role = searchParams.get("role");
+    if (!role) return;
+
+    setActiveTab("register");
+    setUserType(role === "ngo" ? "ngo" : "individual");
+  }, [searchParams]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-4">
-        <div className="flex justify-end">
+    <div className="relative min-h-screen overflow-hidden bg-zinc-100 p-4 sm:p-6">
+      <div className="absolute inset-0">
+        <img
+          src="/login.png"
+          alt="Sahayak background"
+          className="h-full w-full object-cover object-center blur-2xl scale-110 opacity-35"
+        />
+        <div className="absolute inset-0 bg-white/55 backdrop-blur-[2px]" />
+      </div>
+
+      <div className="relative z-10 flex min-h-[calc(100vh-2rem)] items-center justify-center sm:min-h-[calc(100vh-3rem)]">
+        <div className="w-full max-w-md space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{t("app.brand")}</h1>
           <LanguageSwitcher />
         </div>
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">{t("app.brand")}</h1>
-          <p className="text-muted-foreground">{t("auth.connectAid")}</p>
-        </div>
 
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-zinc-200 bg-white shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl">{t("auth.title")}</CardTitle>
             <CardDescription>
@@ -106,9 +122,10 @@ export default function Auth() {
           </CardContent>
         </Card>
 
-        <div className="mt-6 text-center text-sm text-muted-foreground">
+        <div className="mt-2 text-center text-sm text-muted-foreground">
           <p>{t("auth.together")}</p>
         </div>
+      </div>
       </div>
     </div>
   );

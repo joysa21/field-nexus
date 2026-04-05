@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
+import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import RunAgents from "./pages/RunAgents";
 import Issues from "./pages/Issues";
@@ -33,6 +34,8 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Auth />} />
               <Route path="/auth" element={<Auth />} />
               <Route
                 element={
@@ -41,7 +44,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/community" element={<Community />} />
                 <Route path="/community/:type/:id" element={<PostDetail />} />
                 <Route path="/volunteer-portal" element={<VolunteerPortal />} />

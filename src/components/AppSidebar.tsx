@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 
 const ngoNavItems = [
-  { labelKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
+  { labelKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard },
   { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
   { labelKey: "nav.manageFunds", url: "/manage-funds", icon: DollarSign },
   { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
@@ -87,15 +87,15 @@ export function AppSidebar() {
             <SidebarMenu>
               {resolvedNavItems.map((item) => {
                 const label = t(item.labelKey);
-                const isActive = item.url === "/"
-                  ? location.pathname === "/"
+                const isActive = item.url === "/dashboard"
+                  ? location.pathname === "/dashboard"
                   : location.pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={label}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
                       <NavLink
                         to={item.url}
-                        end={item.url === "/"}
+                        end={item.url === "/dashboard"}
                         className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
                           item.accent && !isActive
                             ? "text-sidebar-primary hover:bg-sidebar-accent"

@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { CheckCircle, Circle, Loader2, SkipForward, ArrowRight, Upload, Download, FileText } from "lucide-react";
-import { processFilesWithGemini, formatOutputForDownload, downloadAsTextFile, type ProcessedOutput } from "@/services/geminiService";
+import { CheckCircle, Circle, Loader2, ArrowRight, Upload, Download, FileText } from "lucide-react";
+import { extractTextFromFiles, formatOutputForDownload, downloadAsTextFile, type ProcessedOutput } from "@/services/geminiService";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const STEPS = [
@@ -22,14 +22,13 @@ const STEPS = [
 
 const STEP_ORDER = STEPS.map((s) => s.key);
 
-type StepStatus = "waiting" | "active" | "done" | "skipped";
+type StepStatus = "waiting" | "active" | "done";
 
-function getStepStatus(stepKey: string, currentStep: string, isComplete: boolean, hasOverload: boolean): StepStatus {
+function getStepStatus(stepKey: string, currentStep: string, isComplete: boolean): StepStatus {
   if (currentStep === "starting") return "waiting";
   const currentIdx = STEP_ORDER.indexOf(currentStep === "complete" ? "complete" : currentStep);
   const stepIdx = STEP_ORDER.indexOf(stepKey);
 
-  if (stepKey === "reallocation" && !hasOverload) return "skipped";
   if (isComplete && stepKey === "complete") return "done";
   if (currentStep === stepKey) return "active";
   if (stepIdx < currentIdx) return "done";
@@ -80,12 +79,22 @@ export default function RunAgents() {
     setProcessedOutput(null);
 
     try {
-      const output = await processFilesWithGemini(uploadedFiles, (msg) => {
+      const extracted = await extractTextFromFiles(uploadedFiles, (msg) => {
         setProcessingProgress(msg);
       });
 
+      const combinedText = extracted
+        .map((f, i) => `FILE ${i + 1}: ${f.name}\n---\n${f.content}`)
+        .join("\n\n");
+
+      const output: ProcessedOutput = {
+        originalFiles: extracted.map((f) => f.name),
+        processedText: combinedText,
+        summary: `Extracted text from ${extracted.length} file(s).`,
+      };
+
       setProcessedOutput(output);
-      setRawInput(output.processedText);
+      setRawInput(combinedText);
       toast.success(`Successfully processed ${uploadedFiles.length} file(s)`);
     } catch (e: any) {
       toast.error("File processing failed: " + e.message);
@@ -106,7 +115,9 @@ export default function RunAgents() {
     toast.success("Report downloaded successfully!");
   };
 
-  const handleRunWithInput = async (input: string = rawInput) => {
+  const handleRunWithInput = async () => {
+    const input = rawInput;
+
     if (!input.trim()) {
       toast.error("Please paste a field report first.");
       return;
@@ -148,12 +159,29 @@ export default function RunAgents() {
       if (runErr) throw runErr;
 
       if (finalState.issues.length > 0) {
+        // Keep UI counts consistent across pages by replacing the user's previous issue snapshot.
+        const { error: deleteErr } = await supabase
+          .from("issues")
+          .delete()
+          .eq("ngo_user_id", user.id);
+        if (deleteErr) throw deleteErr;
+
+        // Insert only columns that exist in the issues table schema.
         const issuesPayload = finalState.issues.map((issue) => ({
-          ...issue,
           ngo_user_id: user.id,
+          issue_summary: issue.issue_summary ?? null,
+          sector: issue.sector ?? null,
+          location: issue.location ?? null,
+          affected_count: issue.affected_count ?? null,
+          priority_score: issue.priority_score ?? null,
+          urgency_score: issue.urgency_score ?? null,
+          status: issue.status ?? "unassigned",
+          assigned_volunteer_id: issue.assigned_volunteer_id ?? null,
+          assignment_reason: issue.assignment_reason ?? null,
+          created_at: issue.created_at ?? new Date().toISOString(),
         }));
 
-        const { error: issuesErr } = await supabase.from("issues").insert(issuesPayload);
+        const { error: issuesErr } = await supabase.from("issues").insert(issuesPayload as any);
         if (issuesErr) throw issuesErr;
       }
 
@@ -165,13 +193,8 @@ export default function RunAgents() {
     }
   };
 
-  const handleRun = async () => {
-    await handleRunWithInput(rawInput);
-  };
-
   const currentStep = agentState?.currentStep || "starting";
   const isComplete = agentState?.isComplete || false;
-  const hasOverload = agentState?.alerts.some((a) => a.type === "overload") || false;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -185,12 +208,12 @@ export default function RunAgents() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Upload className="w-4 h-4" />
-            Organize Unstructured Data
+            Extract Text from Reports
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Upload multiple files and reports. Gemini AI will organize, sort, and structure the data for you.
+            Upload reports to extract plain text and paste it into the input box. The agent pipeline will handle AI extraction and scoring.
           </p>
 
           {/* File Input */}
@@ -271,7 +294,7 @@ export default function RunAgents() {
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  Process Files with Gemini
+                  Extract Text from Files
                 </>
               )}
             </Button>
@@ -300,10 +323,12 @@ export default function RunAgents() {
               disabled={running}
             />
           </div>
-          <Button onClick={handleRun} disabled={running || !rawInput.trim()} className="gap-2">
-            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {running ? t("runAgents.running") : t("runAgents.runAll")}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => void handleRunWithInput()} disabled={running || !rawInput.trim()} className="gap-2 flex-1">
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {running ? t("runAgents.running") : t("runAgents.runAll")}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -318,7 +343,7 @@ export default function RunAgents() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {STEPS.map((step) => {
-                  const status = getStepStatus(step.key, currentStep, isComplete, hasOverload);
+                  const status = getStepStatus(step.key, currentStep, isComplete);
                   const log = agentState.agentLogs.find((l) =>
                     l.agent.toLowerCase().includes(step.key === "complete" ? "report" : step.key.replace("_", " "))
                   );
@@ -328,14 +353,13 @@ export default function RunAgents() {
                         {status === "done" && <CheckCircle className="w-5 h-5 text-primary" />}
                         {status === "active" && <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />}
                         {status === "waiting" && <Circle className="w-5 h-5 text-muted-foreground/30" />}
-                        {status === "skipped" && <SkipForward className="w-5 h-5 text-muted-foreground/30" />}
                       </div>
                       <div className="min-w-0">
-                        <p className={`text-sm font-medium leading-tight ${status === "waiting" || status === "skipped" ? "text-muted-foreground" : "text-foreground"}`}>
+                        <p className={`text-sm font-medium leading-tight ${status === "waiting" ? "text-muted-foreground" : "text-foreground"}`}>
                           {t(step.labelKey)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {status === "skipped" ? t("runAgents.skipped") : t(step.descriptionKey)}
+                          {t(step.descriptionKey)}
                         </p>
                         {status === "done" && log && (
                           <p className="text-xs text-primary mt-1 truncate">{log.decision}</p>

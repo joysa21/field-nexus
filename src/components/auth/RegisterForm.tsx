@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -65,36 +65,62 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
     : ngoRegisterSchema;
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: userType === "individual" ? {
-      name: "",
-      location: "",
-      contactNumber: "",
-      email: "",
-      password: "",
-    } : {
-      ngoName: "",
-      location: "",
-      ngoType: "",
-      email: "",
-      password: "",
-    },
+    defaultValues: userType === "individual"
+      ? {
+        name: "",
+        location: "",
+        contactNumber: "",
+        email: "",
+        password: "",
+      }
+      : {
+        ngoName: "",
+        location: "",
+        ngoType: "",
+        email: "",
+        password: "",
+      },
   });
+
+  useEffect(() => {
+    form.reset(
+      userType === "individual"
+        ? {
+          name: "",
+          location: "",
+          contactNumber: "",
+          email: "",
+          password: "",
+        }
+        : {
+          ngoName: "",
+          location: "",
+          ngoType: "",
+          email: "",
+          password: "",
+        },
+    );
+  }, [userType, form]);
 
   const onSubmit = async (values: FormValues) => {
     try {
       setIsLoading(true);
 
-      const displayName = userType === "individual" 
-        ? (values as IndividualFormValues).name 
+      const displayName = userType === "individual"
+        ? (values as IndividualFormValues).name
         : (values as NGOFormValues).ngoName;
 
       const result = await register({
         email: values.email,
         password: values.password,
         userType,
-        name: userType === "individual" ? (values as IndividualFormValues).name : (values as NGOFormValues).ngoName,
+        name: userType === "individual"
+          ? (values as IndividualFormValues).name
+          : (values as NGOFormValues).ngoName,
         location: values.location,
-        contactNumber: userType === "individual" ? (values as IndividualFormValues).contactNumber : undefined,
+        contactNumber: userType === "individual"
+          ? (values as IndividualFormValues).contactNumber
+          : undefined,
         ngoType: userType === "ngo" ? (values as NGOFormValues).ngoType : undefined,
       });
 

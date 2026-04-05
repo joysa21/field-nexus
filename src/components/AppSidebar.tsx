@@ -27,11 +27,13 @@ import {
   Zap,
   LogOut,
   User,
+  DollarSign,
 } from "lucide-react";
 
 const ngoNavItems = [
   { labelKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
   { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
+  { labelKey: "nav.manageFunds", url: "/manage-funds", icon: DollarSign },
   { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
   { labelKey: "nav.volunteers", url: "/volunteers", icon: Users },
   { labelKey: "nav.actionPlan", url: "/action-plan", icon: FileText },
@@ -42,6 +44,7 @@ const ngoNavItems = [
 
 const volunteerNavItems = [
   { labelKey: "nav.volunteerPortal", url: "/volunteer-portal", icon: Users, accent: true },
+  { labelKey: "nav.fundSupport", url: "/fund-support", icon: DollarSign },
   { labelKey: "nav.community", url: "/community", icon: MessageSquare },
   { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
 ];
@@ -53,7 +56,9 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const resolvedNavItems = user?.userType === "individual" ? volunteerNavItems : ngoNavItems;
+  const resolvedNavItems = user?.userType === "individual"
+    ? volunteerNavItems
+    : ngoNavItems;
 
   const handleLogout = async () => {
     await logout();
@@ -118,7 +123,9 @@ export function AppSidebar() {
             <User className="w-4 h-4 text-sidebar-primary flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-medium text-sidebar-primary truncate">{user.email}</p>
-              <p className="text-[9px] text-sidebar-foreground/60 capitalize">{user.userType}</p>
+              <p className="text-[9px] text-sidebar-foreground/60 capitalize">
+                {user.userType}
+              </p>
             </div>
           </div>
         )}

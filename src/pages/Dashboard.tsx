@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   BarChart,
   Bar,
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [sectorData, setSectorData] = useState<SectorData[]>([]);
   const [loading, setLoading] = useState(true);
   const { language, t } = useLanguage();
+  const { user } = useAuth();
 
   const fetchStats = async () => {
     setLoading(true);
@@ -59,7 +61,19 @@ export default function Dashboard() {
     const dbIssues = issuesRes.data || [];
     const dbVolunteers = volunteersRes.data || [];
 
-    const issues = dbIssues;
+    // Add dummy issues for demonstration
+    const dummyIssues = [
+      { priority_score: 9, status: "unassigned", sector: "education" },
+      { priority_score: 7, status: "assigned", sector: "healthcare" },
+      { priority_score: 8, status: "in_progress", sector: "environment" },
+      { priority_score: 6, status: "assigned", sector: "education" },
+      { priority_score: 5, status: "unassigned", sector: "rural_development" },
+      { priority_score: 9, status: "in_progress", sector: "healthcare" },
+      { priority_score: 4, status: "assigned", sector: "environment" },
+      { priority_score: 8, status: "unassigned", sector: "education" },
+    ];
+
+    const issues = [...dbIssues, ...dummyIssues];
     const volunteers = dbVolunteers;
 
     const sectorMap: Record<string, number> = {};
@@ -76,6 +90,7 @@ export default function Dashboard() {
     });
 
     setSectorData(Object.entries(sectorMap).map(([sector, count]) => ({ sector, count })));
+
     setLoading(false);
   };
 

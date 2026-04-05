@@ -3,13 +3,18 @@
 
 create extension if not exists pgcrypto;
 
+-- Rename the role column to user_type to match auth_setup.sql schema
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('ngo', 'individual')),
-  display_name text not null,
+  email text,
+  full_name text,
+  user_type text not null check (user_type in ('ngo', 'individual')),
+  display_name text,
   location text,
+  contact_number text,
   contact_info text,
-  verification_status text not null default 'unverified' check (verification_status in ('unverified', 'pending', 'verified')),
+  ngo_type text,
+  verification_status text default 'unverified' check (verification_status in ('unverified', 'pending', 'verified')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -125,8 +125,8 @@ export type Database = {
           email: string;
           full_name: string | null;
           display_name: string | null;
-          user_type: "individual" | "ngo";
-          role: "individual" | "ngo";
+          user_type: "individual" | "ngo" | "sponsor";
+          role: "individual" | "ngo" | "sponsor";
           location: string | null;
           contact_info: string | null;
           contact_number: string | null;
@@ -140,8 +140,8 @@ export type Database = {
           email: string;
           full_name?: string | null;
           display_name?: string | null;
-          user_type: "individual" | "ngo";
-          role?: "individual" | "ngo";
+          user_type: "individual" | "ngo" | "sponsor";
+          role?: "individual" | "ngo" | "sponsor";
           location?: string | null;
           contact_info?: string | null;
           contact_number?: string | null;
@@ -155,8 +155,8 @@ export type Database = {
           email?: string;
           full_name?: string | null;
           display_name?: string | null;
-          user_type?: "individual" | "ngo";
-          role?: "individual" | "ngo";
+          user_type?: "individual" | "ngo" | "sponsor";
+          role?: "individual" | "ngo" | "sponsor";
           location?: string | null;
           contact_info?: string | null;
           contact_number?: string | null;
@@ -270,6 +270,7 @@ export type Database = {
           urgency: string;
           location: string | null;
           volunteers_needed: number | null;
+          funding_amount: number | null;
           skills_needed: string[] | null;
           deadline: string | null;
           contact_method: string | null;
@@ -286,6 +287,7 @@ export type Database = {
           urgency: string;
           location?: string | null;
           volunteers_needed?: number | null;
+          funding_amount?: number | null;
           skills_needed?: string[] | null;
           deadline?: string | null;
           contact_method?: string | null;
@@ -302,6 +304,7 @@ export type Database = {
           urgency?: string;
           location?: string | null;
           volunteers_needed?: number | null;
+          funding_amount?: number | null;
           skills_needed?: string[] | null;
           deadline?: string | null;
           contact_method?: string | null;

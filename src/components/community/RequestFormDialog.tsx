@@ -27,6 +27,7 @@ export interface RequestFormValues {
   urgency: "low" | "medium" | "high" | "critical";
   location: string;
   volunteersNeeded: number;
+  fundingAmount: number;
   skillsNeeded: string;
   deadline: string;
   contactMethod: string;
@@ -39,6 +40,7 @@ const INITIAL_STATE: RequestFormValues = {
   urgency: "medium",
   location: "Pune",
   volunteersNeeded: 8,
+  fundingAmount: 25000,
   skillsNeeded: "crowd coordination, logistics, first aid",
   deadline: "2026-04-12",
   contactMethod: "Email: relief@demo-ngo.org",
@@ -110,6 +112,13 @@ export function RequestFormDialog({
             placeholder={t("requestForm.volunteersNeededField")}
             value={values.volunteersNeeded}
             onChange={(e) => update("volunteersNeeded", Number(e.target.value || 1))}
+          />
+          <Input
+            type="number"
+            min={0}
+            placeholder={t("requestForm.fundingAmountField")}
+            value={values.fundingAmount}
+            onChange={(e) => update("fundingAmount", Number(e.target.value || 0))}
           />
           <Input placeholder={t("requestForm.skillsNeededField")} value={values.skillsNeeded} onChange={(e) => update("skillsNeeded", e.target.value)} />
           <Input type="date" placeholder={t("requestForm.deadlineField")} value={values.deadline} onChange={(e) => update("deadline", e.target.value)} />

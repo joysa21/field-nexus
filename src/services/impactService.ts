@@ -885,6 +885,7 @@ const MOCK_NGO_REQUESTS = MOCK_NGO_DIRECTORY.map((ngo, idx) => ({
   category: ngo.details.sector,
   urgency: idx % 4 === 0 ? "high" : idx % 3 === 0 ? "critical" : "medium",
   location: ngo.location || "Not specified",
+  funding_amount: [15000, 22000, 18000, 32000, 28000, 25000, 40000, 20000, 30000, 26000][idx] || 20000,
   status: "open",
   created_at: new Date(Date.now() - idx * 3600_000).toISOString(),
 }));
@@ -941,6 +942,7 @@ const buildMockCommunityFeed = (): CommunityPost[] => {
       createdAt: request.created_at,
       ownerName: owner?.display_name || "Unknown NGO",
       ownerRole: "ngo",
+      fundingAmount: request.funding_amount,
     };
   });
 
@@ -983,11 +985,10 @@ const buildOwnerMap = async () => {
     .from("profiles")
     .select("id, user_type, display_name, full_name");
 
-  const ownerMap = new Map<string, { role: UserRole; name: string; display_name: string }>();
+  const ownerMap = new Map<string, { role: UserRole; name: string }>();
   (data || []).forEach((profile) => {
     ownerMap.set(profile.id, {
       role: profile.user_type as UserRole,
-      display_name: profile.display_name || profile.full_name || "Unknown",
       name: profile.display_name || profile.full_name || "Unknown",
     });
   });
@@ -1152,6 +1153,7 @@ export async function getCommunityFeed() {
       createdAt: request.created_at,
       ownerName: owner?.name || "Unknown",
       ownerRole: owner?.role || "ngo",
+      fundingAmount: request.funding_amount ?? null,
     };
   });
 
@@ -1185,6 +1187,7 @@ export async function createNgoRequest(payload: {
   urgency: "low" | "medium" | "high" | "critical";
   location: string;
   volunteersNeeded: number;
+  fundingAmount: number;
   skillsNeeded: string;
   deadline?: string;
   contactMethod: string;
@@ -1202,6 +1205,7 @@ export async function createNgoRequest(payload: {
       urgency: payload.urgency,
       location: payload.location,
       volunteers_needed: payload.volunteersNeeded,
+      funding_amount: payload.fundingAmount,
       skills_needed: splitList(payload.skillsNeeded),
       deadline: payload.deadline || null,
       contact_method: payload.contactMethod,

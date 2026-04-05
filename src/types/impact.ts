@@ -51,6 +51,7 @@ export interface CommunityPost {
   createdAt: string;
   ownerName: string;
   ownerRole: UserRole;
+  fundingAmount?: number | null;
 }
 
 export interface CommunityFilter {

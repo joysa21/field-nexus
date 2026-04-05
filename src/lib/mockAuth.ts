@@ -9,6 +9,7 @@ export interface MockSession {
   email: string;
   displayName: string;
   role: UserRole;
+  user_type: UserRole;
   volunteeringDomain: VolunteerDomain;
   availableForNgo: boolean;
 }
@@ -30,6 +31,7 @@ export function getMockSession(): MockSession | null {
       email: parsed.email,
       displayName: parsed.displayName,
       role: parsed.role,
+      user_type: parsed.user_type || parsed.role,
       volunteeringDomain: parsed.volunteeringDomain || VOLUNTEER_DOMAINS[0],
       availableForNgo: parsed.availableForNgo ?? false,
     };
@@ -52,6 +54,7 @@ export function setMockSession(payload: {
     email: payload.email,
     displayName: payload.displayName || existing?.displayName || payload.email.split("@")[0] || "User",
     role: payload.role,
+    user_type: payload.role,
     volunteeringDomain: payload.volunteeringDomain,
     availableForNgo: payload.availableForNgo ?? existing?.availableForNgo ?? false,
   };

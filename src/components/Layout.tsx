@@ -8,6 +8,8 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { toast } from "sonner";
 import { clearMockSession, isMockAuthEnabled } from "@/lib/mockAuth";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { FollowUpNotificationBell } from "@/components/FollowUpNotificationBell";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Layout() {
@@ -33,6 +35,8 @@ export default function Layout() {
           <header className="h-12 flex items-center justify-between border-b bg-background px-4 no-print">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
             <div className="flex items-center gap-2">
+              <FollowUpNotificationBell />
+              <ThemeToggle />
               <LanguageSwitcher />
               {isAuthenticated && (
                 <Button size="sm" variant="outline" onClick={signOut}>{t("common.signOut")}</Button>

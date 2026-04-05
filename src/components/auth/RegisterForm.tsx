@@ -40,7 +40,7 @@ type NGOFormValues = z.infer<typeof ngoRegisterSchema>;
 type FormValues = IndividualFormValues | NGOFormValues;
 
 interface RegisterFormProps {
-  userType: "individual" | "ngo";
+  userType: "individual" | "ngo" | "sponsor";
   onSuccess: () => void;
 }
 
@@ -60,23 +60,23 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
   const { register } = useAuth();
   const { t } = useLanguage();
 
-  const schema = userType === "individual"
-    ? individualRegisterSchema
-    : ngoRegisterSchema;
+  const schema = userType === "ngo"
+    ? ngoRegisterSchema
+    : individualRegisterSchema;
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: userType === "individual"
+    defaultValues: userType === "ngo"
       ? {
-        name: "",
+        ngoName: "",
         location: "",
-        contactNumber: "",
+        ngoType: "",
         email: "",
         password: "",
       }
       : {
-        ngoName: "",
+        name: "",
         location: "",
-        ngoType: "",
+        contactNumber: "",
         email: "",
         password: "",
       },
@@ -84,18 +84,18 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
 
   useEffect(() => {
     form.reset(
-      userType === "individual"
+      userType === "ngo"
         ? {
-          name: "",
+          ngoName: "",
           location: "",
-          contactNumber: "",
+          ngoType: "",
           email: "",
           password: "",
         }
         : {
-          ngoName: "",
+          name: "",
           location: "",
-          ngoType: "",
+          contactNumber: "",
           email: "",
           password: "",
         },
@@ -106,21 +106,21 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
     try {
       setIsLoading(true);
 
-      const displayName = userType === "individual"
-        ? (values as IndividualFormValues).name
-        : (values as NGOFormValues).ngoName;
+      const displayName = userType === "ngo"
+        ? (values as NGOFormValues).ngoName
+        : (values as IndividualFormValues).name;
 
       const result = await register({
         email: values.email,
         password: values.password,
         userType,
-        name: userType === "individual"
-          ? (values as IndividualFormValues).name
-          : (values as NGOFormValues).ngoName,
+        name: userType === "ngo"
+          ? (values as NGOFormValues).ngoName
+          : (values as IndividualFormValues).name,
         location: values.location,
-        contactNumber: userType === "individual"
-          ? (values as IndividualFormValues).contactNumber
-          : undefined,
+        contactNumber: userType === "ngo"
+          ? undefined
+          : (values as IndividualFormValues).contactNumber,
         ngoType: userType === "ngo" ? (values as NGOFormValues).ngoType : undefined,
       });
 
@@ -147,7 +147,7 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-        {userType === "individual" ? (
+        {userType !== "ngo" ? (
           <>
             {/* Individual Form */}
             <FormField

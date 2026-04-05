@@ -33,6 +33,7 @@ import {
   DollarSign,
   Building2,
   Handshake,
+  Heart,
 } from "lucide-react";
 
 const ngoNavItems = [
@@ -56,6 +57,12 @@ const volunteerNavItems = [
   { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
 ];
 
+const sponsorNavItems = [
+  { labelKey: "nav.sponsorPortal", url: "/sponsor-portal", icon: Heart, accent: true },
+  { labelKey: "nav.community", url: "/community", icon: MessageSquare },
+  { labelKey: "nav.saved", url: "/saved", icon: Bookmark },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -66,7 +73,9 @@ export function AppSidebar() {
   const [ngoProfile, setNgoProfile] = useState<NgoProfile | null>(null);
   const resolvedNavItems = user?.userType === "individual"
     ? volunteerNavItems
-    : ngoNavItems;
+    : user?.userType === "sponsor"
+      ? sponsorNavItems
+      : ngoNavItems;
 
   useEffect(() => {
     let active = true;
@@ -121,15 +130,15 @@ export function AppSidebar() {
             <SidebarMenu>
               {resolvedNavItems.map((item) => {
                 const label = t(item.labelKey);
-                const isActive = item.url === "/dashboard"
-                  ? location.pathname === "/dashboard"
+                const isActive = item.url === "/dashboard" || item.url === "/sponsor-portal"
+                  ? location.pathname === item.url
                   : location.pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={label}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
                       <NavLink
                         to={item.url}
-                        end={item.url === "/dashboard"}
+                        end={item.url === "/dashboard" || item.url === "/sponsor-portal"}
                         className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
                           item.accent && !isActive
                             ? "text-sidebar-primary hover:bg-sidebar-accent"

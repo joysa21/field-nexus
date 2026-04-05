@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { MapPin, MessageSquare, Bookmark, Handshake } from "lucide-react";
+import { MapPin, MessageSquare, Bookmark, Handshake, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { CommunityPost } from "@/types/impact";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -18,11 +18,16 @@ interface PostCardProps {
   onEdit?: (post: CommunityPost) => void;
   onDelete?: (post: CommunityPost) => void;
   onMarkClosed?: (post: CommunityPost) => void;
+  showSponsorAction?: boolean;
+  isSponsored?: boolean;
+  sponsorLabel?: string;
+  onSponsor?: (post: CommunityPost) => void;
 }
 
 const roleTone = {
   ngo: "default",
   individual: "secondary",
+  sponsor: "outline",
 } as const;
 
 export function PostCard({
@@ -36,6 +41,10 @@ export function PostCard({
   onEdit,
   onDelete,
   onMarkClosed,
+  showSponsorAction,
+  isSponsored,
+  sponsorLabel,
+  onSponsor,
 }: PostCardProps) {
   const { language, t } = useLanguage();
 
@@ -49,20 +58,23 @@ export function PostCard({
               <Badge variant="outline">{translatePostType(language, post.postType)}</Badge>
               <Badge variant="outline">{translateStatus(language, post.status)}</Badge>
             </div>
-            <h3 className="text-base font-semibold mt-2 leading-tight">{post.title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{t("community.postedBy", { name: post.ownerName })}</p>
+            <h3 className="text-base font-semibold mt-2 leading-tight text-semantic-primary">{post.title}</h3>
+            <p className="text-sm text-semantic-muted mt-1">{t("community.postedBy", { name: post.ownerName })}</p>
           </div>
-          <div className="text-xs text-muted-foreground whitespace-nowrap">
+          <div className="text-xs text-semantic-muted whitespace-nowrap">
             {formatDateTime(language, post.createdAt)}
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3 pt-2">
-        <p className="text-sm text-foreground whitespace-pre-wrap">{post.description}</p>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <p className="text-sm text-semantic-secondary whitespace-pre-wrap">{post.description}</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-semantic-muted">
           <Badge variant="outline">{translateLabel(language, post.category)}</Badge>
           <Badge variant="outline">{t("community.urgencyLabel", { value: translateUrgency(language, post.urgency) })}</Badge>
+          {post.postType === "ngo_request" && post.fundingAmount != null && (
+            <Badge variant="outline">Funding: Rs {post.fundingAmount.toLocaleString()}</Badge>
+          )}
           <span className="inline-flex items-center gap-1">
             <MapPin className="h-3.5 w-3.5" />
             {post.location}
@@ -100,6 +112,16 @@ export function PostCard({
             <Button size="sm" onClick={() => onRespond?.(post)}>
               <Handshake className="h-4 w-4 mr-1" />
               {respondLabel || (post.postType === "ngo_request" ? t("community.helpNgo") : t("community.connect"))}
+            </Button>
+          )}
+          {showSponsorAction && !isOwner && (
+            <Button
+              variant={isSponsored ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => onSponsor?.(post)}
+            >
+              <Heart className="h-4 w-4 mr-1" />
+              {sponsorLabel || t("community.sponsor")}
             </Button>
           )}
         </div>

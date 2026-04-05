@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserType = "individual" | "ngo";
+export type UserType = "individual" | "ngo" | "sponsor";
 
 interface User {
   id: string;
@@ -42,11 +42,8 @@ const mapToAppUser = (
   profile?: { user_type?: UserType | null; full_name?: string | null },
 ): User => {
   const metadataUserType = authUser.user_metadata?.user_type as UserType | undefined;
-  const normalizedUserType = profile?.user_type ?? (
-    metadataUserType === "ngo"
-      ? metadataUserType
-      : "individual"
-  );
+  const normalizedUserType = profile?.user_type
+    ?? (metadataUserType === "ngo" || metadataUserType === "sponsor" ? metadataUserType : "individual");
 
   return {
     id: authUser.id,
@@ -85,6 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       id: authUser.id,
       email: authUser.email ?? "",
       user_type: userType,
+      role: userType,
       full_name: details.full_name ?? null,
       location: details.location ?? null,
       contact_number: details.contact_number ?? null,

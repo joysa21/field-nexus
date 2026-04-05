@@ -41,11 +41,17 @@ const mapToAppUser = (
   authUser: SupabaseUser,
   profile?: { user_type?: UserType | null; full_name?: string | null },
 ): User => {
-  const metadataUserType = authUser.user_metadata?.user_type;
+  const metadataUserType = authUser.user_metadata?.user_type as UserType | undefined;
+  const normalizedUserType = profile?.user_type ?? (
+    metadataUserType === "ngo"
+      ? metadataUserType
+      : "individual"
+  );
+
   return {
     id: authUser.id,
     email: authUser.email ?? "",
-    userType: profile?.user_type ?? (metadataUserType === "ngo" ? "ngo" : "individual"),
+    userType: normalizedUserType,
     name: profile?.full_name ?? undefined,
   };
 };
@@ -152,7 +158,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(mapToAppUser(sessionUser, { user_type: sessionUser.user_metadata?.user_type }));
 
       void getProfile(sessionUser.id)
-        .then((profile) => setUser(mapToAppUser(sessionUser, profile)))
+        .then((profile) => {
+          // Use fetched profile if available, otherwise use metadata
+          const finalProfile = profile || { user_type: sessionUser.user_metadata?.user_type as UserType | null, full_name: null };
+          setUser(mapToAppUser(sessionUser, finalProfile));
+        })
         .catch((error) => console.error("Auth state sync failed:", error));
     });
 
@@ -179,8 +189,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         upsertProfile(authUser, userType),
         trackAuthEvent("login", authUser.id, authUser.email ?? email),
         withTimeout(getProfile(authUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile")
-          .then((profile) => setUser(mapToAppUser(authUser, profile)))
-          .catch((error) => console.error("Profile sync after login failed:", error)),
+          .then((profile) => {
+            // Use fetched profile if available, otherwise use the userType parameter
+            const finalProfile = profile || { user_type: userType, full_name: null };
+            setUser(mapToAppUser(authUser, finalProfile));
+          })
+          .catch((error) => {
+            console.error("Profile sync after login failed:", error);
+            // Fallback: use the userType parameter if profile fetch fails
+            setUser(mapToAppUser(authUser, { user_type: userType, full_name: null }));
+          }),
       ]);
 
       return {};

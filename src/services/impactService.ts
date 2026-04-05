@@ -319,13 +319,14 @@ const isMissingTableError = (error: unknown) => {
 const buildOwnerMap = async () => {
   const { data } = await supabase
     .from("profiles")
-    .select("id, role, display_name");
+    .select("id, user_type, display_name, full_name");
 
   const ownerMap = new Map<string, { role: UserRole; name: string }>();
   (data || []).forEach((profile) => {
     ownerMap.set(profile.id, {
-      role: profile.role,
-      name: profile.display_name,
+      role: profile.user_type as UserRole,
+      display_name: profile.display_name || profile.full_name || "Unknown",
+      name: profile.display_name || profile.full_name,
     });
   });
 
@@ -488,7 +489,7 @@ export async function getCommunityFeed() {
       status: request.status,
       createdAt: request.created_at,
       ownerName: owner?.name || "Unknown",
-      ownerRole: owner?.role || "ngo",
+      ownerRole: owner?.user_type || "ngo",
     };
   });
 
@@ -506,7 +507,7 @@ export async function getCommunityFeed() {
       status: offer.status,
       createdAt: offer.created_at,
       ownerName: owner?.name || "Unknown",
-      ownerRole: owner?.role || "individual",
+      ownerRole: owner?.user_type || "individual",
     };
   });
 
@@ -684,9 +685,9 @@ export async function getConnectionsForMe() {
       id: `mock-conn-${idx + 1}`,
       request_id: `mock-req-${idx + 1}`,
       offer_id: null,
-      sender_id: session?.role === "ngo" ? ngoId : user.id,
-      receiver_id: session?.role === "ngo" ? user.id : ngoId,
-      message: session?.role === "ngo"
+      sender_id: session?.user_type === "ngo" ? ngoId : user.id,
+      receiver_id: session?.user_type === "ngo" ? user.id : ngoId,
+      message: session?.user_type === "ngo"
         ? `Thanks for helping ${MOCK_NGO_DIRECTORY[idx].display_name}. Follow-up impact report shared.`
         : `I supported ${MOCK_NGO_DIRECTORY[idx].display_name} on ground operations and volunteer coordination.`,
       status: "completed",
@@ -995,7 +996,7 @@ export async function getNgoDirectory() {
   }
 
   const [baseProfiles, ngoProfiles] = await Promise.all([
-    supabase.from("profiles").select("*").eq("role", "ngo"),
+    supabase.from("profiles").select("*").eq("user_type", "ngo"),
     supabase.from("ngo_profiles").select("*"),
   ]);
 
@@ -1016,7 +1017,7 @@ export async function getVolunteerDirectory() {
   }
 
   const [baseProfiles, individualProfiles] = await Promise.all([
-    supabase.from("profiles").select("*").eq("role", "individual"),
+    supabase.from("profiles").select("*").eq("user_type", "individual"),
     supabase.from("individual_profiles").select("*"),
   ]);
 
@@ -1039,7 +1040,7 @@ export async function getProfileByUserId(userId: string) {
       return {
         profile: {
           id: session.id,
-          role: session.role,
+          role: session.user_type,
           display_name: session.displayName,
           location: "Delhi",
           contact_info: session.email,
@@ -1047,7 +1048,7 @@ export async function getProfileByUserId(userId: string) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
-        ngoProfile: session.role === "ngo"
+        ngoProfile: session.user_type === "ngo"
           ? {
               user_id: session.id,
               ngo_name: session.displayName,
@@ -1057,7 +1058,7 @@ export async function getProfileByUserId(userId: string) {
               contact_info: session.email,
             }
           : null,
-        individualProfile: session.role === "individual"
+        individualProfile: session.user_type === "individual"
           ? {
               user_id: session.id,
               full_name: session.displayName,
@@ -1201,7 +1202,7 @@ export async function getRecommendations() {
     const session = getMockSession();
     const feed = await getCommunityFeed();
 
-    if (session?.role === "ngo") {
+    if (session?.user_type === "ngo") {
       return feed.filter((post) => post.postType === "volunteer_offer").slice(0, 3);
     }
 
@@ -1228,7 +1229,7 @@ export async function getRecommendations() {
       const locationMatch = profile.location && post.location && profile.location === post.location;
       if (locationMatch) score += 2;
 
-      if (profile.role === "individual") {
+      if (profile.user_type === "individual") {
         if (post.postType === "ngo_request") {
           score += 2;
           const interests = new Set((individualResult.data?.interests || []).map((x) => x.toLowerCase()));

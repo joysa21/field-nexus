@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -72,6 +72,8 @@ export default function Community() {
   const accountType = profile ? ("user_type" in profile ? profile.user_type : (profile as { role?: string }).role) : null;
   const canPostRequest = accountType === "ngo" || accountType === "individual";
   const canPostOffer = accountType === "ngo" || accountType === "individual";
+
+  const navigate = useNavigate();
 
   const refresh = async () => {
     setLoading(true);
@@ -440,6 +442,7 @@ export default function Community() {
                 canRespond={canRespondTo(post)}
                 isOwner={post.ownerId === userId}
                 isSaved={savedKeys.has(key)}
+                respondLabel={undefined}
                 onSave={handleSave}
                 onRespond={handleRespond}
                 onEdit={handleEdit}

@@ -19,6 +19,8 @@ import VolunteerPortal from "./pages/VolunteerPortal";
 import Saved from "./pages/Saved";
 import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
+import FundSupport from "./pages/FundSupport";
+import ManageFunds from "./pages/ManageFunds";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +45,8 @@ const App = () => (
                 <Route path="/community" element={<Community />} />
                 <Route path="/community/:type/:id" element={<PostDetail />} />
                 <Route path="/volunteer-portal" element={<VolunteerPortal />} />
+                <Route path="/fund-support" element={<FundSupport />} />
+                <Route path="/manage-funds" element={<ManageFunds />} />
                 <Route path="/saved" element={<Saved />} />
                 <Route path="/run" element={<RunAgents />} />
                 <Route path="/issues" element={<Issues />} />

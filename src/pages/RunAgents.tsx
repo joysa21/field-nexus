@@ -44,7 +44,9 @@ export default function RunAgents() {
   const [rawInput, setRawInput] = useState("");
   const [running, setRunning] = useState(false);
   const [agentState, setAgentState] = useState<AgentState | null>(null);
+  const [debugLogs, setDebugLogs] = useState<Array<{ timestamp: string; message: string }>>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const debugRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
   
   // File upload states
@@ -59,6 +61,22 @@ export default function RunAgents() {
     }
   }, [agentState?.agentLogs]);
 
+  useEffect(() => {
+    if (debugRef.current) {
+      debugRef.current.scrollTop = debugRef.current.scrollHeight;
+    }
+  }, [debugLogs]);
+
+  const addDebugLog = (message: string) => {
+    setDebugLogs((prev) => [
+      ...prev,
+      {
+        timestamp: new Date().toISOString(),
+        message,
+      },
+    ]);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setUploadedFiles((prev) => [...prev, ...files]);
@@ -68,60 +86,22 @@ export default function RunAgents() {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleProcessFiles = async () => {
-    if (uploadedFiles.length === 0) {
-      toast.error("Please select at least one file to process.");
-      return;
-    }
+  const runPipelineWithInput = async (inputText: string, source: "manual" | "files" = "manual") => {
+    const input = String(inputText ?? '').trim();
 
-    setProcessingFiles(true);
-    setProcessingProgress("Initializing...");
-    setProcessedOutput(null);
-
-    try {
-      const extracted = await extractTextFromFiles(uploadedFiles, (msg) => {
-        setProcessingProgress(msg);
-      });
-
-      const combinedText = extracted
-        .map((f, i) => `FILE ${i + 1}: ${f.name}\n---\n${f.content}`)
-        .join("\n\n");
-
-      const output: ProcessedOutput = {
-        originalFiles: extracted.map((f) => f.name),
-        processedText: combinedText,
-        summary: `Extracted text from ${extracted.length} file(s).`,
-      };
-
-      setProcessedOutput(output);
-      setRawInput(combinedText);
-      toast.success(`Successfully processed ${uploadedFiles.length} file(s)`);
-    } catch (e: any) {
-      toast.error("File processing failed: " + e.message);
-      setProcessingProgress("");
-    } finally {
-      setProcessingFiles(false);
-    }
-  };
-
-  const handleDownloadProcessed = () => {
-    if (!processedOutput) {
-      toast.error("No processed data to download.");
-      return;
-    }
-
-    const formatted = formatOutputForDownload(processedOutput);
-    downloadAsTextFile(formatted, "processed-report");
-    toast.success("Report downloaded successfully!");
-  };
-
-  const handleRunWithInput = async () => {
-    const input = rawInput;
-
-    if (!input.trim()) {
+    if (!input) {
       toast.error("Please paste a field report first.");
       return;
     }
+
+    console.log("[RunAgents] Starting pipeline", {
+      source,
+      inputLength: input.length,
+      preview: input.slice(0, 200),
+    });
+
+    addDebugLog(`Pipeline started from ${source} input (${input.length} chars)`);
+
     setRunning(true);
     setAgentState(null);
 
@@ -141,11 +121,30 @@ export default function RunAgents() {
         .eq("ngo_user_id", user.id)
         .eq("is_active", true);
 
+      console.log("[RunAgents] Volunteers loaded", {
+        count: volunteers?.length || 0,
+        volunteerIds: (volunteers || []).map((volunteer) => volunteer.id),
+      });
+
+      addDebugLog(`Loaded ${(volunteers || []).length} active volunteer(s)`);
+
       const finalState = await runOrchestrator(
         input,
         volunteers || [],
-        (state) => setAgentState({ ...state })
+        (state) => {
+          setAgentState({ ...state });
+          addDebugLog(`Step ${state.currentStep}: ${state.issues.length} issue(s), ${state.alerts.length} alert(s)`);
+        }
       );
+
+      console.log("[RunAgents] Pipeline finished", {
+        issues: finalState.issues.length,
+        assignments: finalState.assignments.length,
+        alerts: finalState.alerts.length,
+        currentStep: finalState.currentStep,
+      });
+
+      addDebugLog(`Pipeline finished with ${finalState.issues.length} issue(s) and ${finalState.assignments.length} assignment(s)`);
 
       // Save to Supabase with owner id so logs can be scoped per user.
       const { error: runErr } = await supabase.from("agent_runs").insert({
@@ -159,14 +158,7 @@ export default function RunAgents() {
       if (runErr) throw runErr;
 
       if (finalState.issues.length > 0) {
-        // Keep UI counts consistent across pages by replacing the user's previous issue snapshot.
-        const { error: deleteErr } = await supabase
-          .from("issues")
-          .delete()
-          .eq("ngo_user_id", user.id);
-        if (deleteErr) throw deleteErr;
-
-        // Insert only columns that exist in the issues table schema.
+        // Append issues so previous runs remain saved in Supabase.
         const issuesPayload = finalState.issues.map((issue) => ({
           ngo_user_id: user.id,
           issue_summary: issue.issue_summary ?? null,
@@ -188,9 +180,79 @@ export default function RunAgents() {
       toast.success(t("runAgents.pipelineComplete", { count: finalState.issues.length }));
     } catch (e: any) {
       toast.error(t("runAgents.pipelineError", { message: e.message }));
+      addDebugLog(`Pipeline error: ${e.message}`);
     } finally {
       setRunning(false);
     }
+  };
+
+  const handleProcessFiles = async () => {
+    if (uploadedFiles.length === 0) {
+      toast.error("Please select at least one file to process.");
+      return;
+    }
+
+    setProcessingFiles(true);
+    setProcessingProgress("Initializing...");
+    setProcessedOutput(null);
+
+    try {
+      console.log("[RunAgents] Extracting text from files", {
+        fileCount: uploadedFiles.length,
+        fileNames: uploadedFiles.map((file) => file.name),
+      });
+
+      addDebugLog(`Extracting ${uploadedFiles.length} file(s)`);
+
+      const extracted = await extractTextFromFiles(uploadedFiles, (msg) => {
+        console.log("[RunAgents] File extraction progress", msg);
+        setProcessingProgress(msg);
+        addDebugLog(msg);
+      });
+
+      const combinedText = extracted
+        .map((f, i) => `FILE ${i + 1}: ${f.name}\n---\n${f.content}`)
+        .join("\n\n");
+
+      console.log("[RunAgents] Extraction complete", {
+        extractedFiles: extracted.map((file) => file.name),
+        combinedTextLength: combinedText.length,
+      });
+
+      addDebugLog(`Extraction complete (${combinedText.length} chars)`);
+
+      const output: ProcessedOutput = {
+        originalFiles: extracted.map((f) => f.name),
+        processedText: combinedText,
+        summary: `Extracted text from ${extracted.length} file(s).`,
+      };
+
+      setProcessedOutput(output);
+      setRawInput(combinedText);
+      void runPipelineWithInput(combinedText, "files");
+      toast.success(`Successfully processed ${uploadedFiles.length} file(s)`);
+    } catch (e: any) {
+      toast.error("File processing failed: " + e.message);
+      setProcessingProgress("");
+      addDebugLog(`File processing failed: ${e.message}`);
+    } finally {
+      setProcessingFiles(false);
+    }
+  };
+
+  const handleDownloadProcessed = () => {
+    if (!processedOutput) {
+      toast.error("No processed data to download.");
+      return;
+    }
+
+    const formatted = formatOutputForDownload(processedOutput);
+    downloadAsTextFile(formatted, "processed-report");
+    toast.success("Report downloaded successfully!");
+  };
+
+  const handleRunWithInput = async () => {
+    await runPipelineWithInput(rawInput, "manual");
   };
 
   const currentStep = agentState?.currentStep || "starting";
@@ -328,6 +390,30 @@ export default function RunAgents() {
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {running ? t("runAgents.running") : t("runAgents.runAll")}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Debug Feed</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            ref={debugRef}
+            className="rounded-md border border-muted-foreground/20 bg-[#0f1117] p-3 font-mono text-xs leading-relaxed overflow-y-auto"
+            style={{ minHeight: 160, maxHeight: 260 }}
+          >
+            {debugLogs.length === 0 ? (
+              <span className="text-green-400/40">No debug events yet.</span>
+            ) : (
+              debugLogs.map((log, index) => (
+                <div key={index} className="mb-1 text-green-200">
+                  <span className="text-green-400/60">[{formatTime(log.timestamp)}]</span>{" "}
+                  <span>{log.message}</span>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

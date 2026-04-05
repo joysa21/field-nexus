@@ -6,6 +6,10 @@ import type {
   CommunityPostType,
   ConnectionResponse,
   NotificationItem,
+  SponsorDirectoryItem,
+  SponsorMatch,
+  SponsorMatchSource,
+  SponsorPortalStatus,
   UserRole,
 } from "@/types/impact";
 
@@ -254,6 +258,625 @@ const MOCK_VOLUNTEER_DIRECTORY = [
   },
 ];
 
+const MOCK_SPONSOR_DIRECTORY: SponsorDirectoryItem[] = [
+  {
+    id: "sponsor-1",
+    display_name: "Apex CSR Foundation",
+    organization: "Apex Group",
+    description: "Supports clean water, healthcare camps, sanitation and emergency relief in underserved districts.",
+    location: "Delhi",
+    email: "csr@apexgroup.org",
+    contact_number: "+91 98765 40001",
+    website: "https://apexgroup.org/csr",
+    focus_areas: ["water", "healthcare", "sanitation", "disaster relief"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-2",
+    display_name: "BrightFuture Philanthropy",
+    organization: "BrightFuture Trust",
+    description: "Focuses on education access, child welfare, nutrition, and learning continuity programs.",
+    location: "Mumbai",
+    email: "partnerships@brightfuture.org",
+    contact_number: "+91 98200 12002",
+    website: "https://brightfuture.org",
+    focus_areas: ["education", "child welfare", "nutrition"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-3",
+    display_name: "SafeStep Corporate Social Impact",
+    organization: "SafeStep India",
+    description: "Backs women safety, safe transport, livelihood access, and community empowerment initiatives.",
+    location: "Bengaluru",
+    email: "impact@safestep.in",
+    contact_number: "+91 98111 23003",
+    website: "https://safestep.in",
+    focus_areas: ["women safety", "livelihood", "empowerment"],
+    portal_status: "external",
+  },
+  {
+    id: "sponsor-4",
+    display_name: "ReliefFirst Foundation",
+    organization: "ReliefFirst",
+    description: "Funds flood relief, shelter setup, ration kits, logistics and rapid response operations.",
+    location: "Hyderabad",
+    email: "relief@relieffirst.org",
+    contact_number: "+91 98450 45004",
+    website: "https://relieffirst.org",
+    focus_areas: ["shelter", "food", "logistics", "flood relief"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-5",
+    display_name: "HealthBridge Care Partners",
+    organization: "HealthBridge",
+    description: "Supports medical camps, medicines, maternal health, child screening and outreach.",
+    location: "Pune",
+    email: "care@healthbridge.org",
+    contact_number: "+91 98901 50005",
+    website: "https://healthbridge.org",
+    focus_areas: ["healthcare", "maternal health", "child health", "medicines"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-6",
+    display_name: "AquaLife CSR",
+    organization: "AquaLife Ltd.",
+    description: "Invests in water purification, tankers, hygiene, sanitation and WASH programs.",
+    location: "Lucknow",
+    email: "wash@aqualife.in",
+    contact_number: "+91 98133 60006",
+    website: "https://aqualife.in",
+    focus_areas: ["water", "sanitation", "hygiene", "wash"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-7",
+    display_name: "SkillRise Foundation",
+    organization: "SkillRise Network",
+    description: "Delivers vocational training, job linkage, mentoring and youth employability programs.",
+    location: "Kolkata",
+    email: "jobs@skillrise.org",
+    contact_number: "+91 98888 70007",
+    website: "https://skillrise.org",
+    focus_areas: ["education", "training", "livelihood", "job opportunities"],
+    portal_status: "external",
+  },
+  {
+    id: "sponsor-8",
+    display_name: "Community Care Alliance",
+    organization: "CCA",
+    description: "Works on nutrition awareness, child screening, hygiene kits and community outreach.",
+    location: "Chennai",
+    email: "community@cca.org",
+    contact_number: "+91 98321 80008",
+    website: "https://cca.org",
+    focus_areas: ["nutrition", "child health", "sanitation", "community outreach"],
+    portal_status: "external",
+  },
+  {
+    id: "sponsor-9",
+    display_name: "WomenRise Collective",
+    organization: "WomenRise",
+    description: "Funds women safety, transport, rights awareness and financial independence initiatives.",
+    location: "Jaipur",
+    email: "hello@womenrise.org",
+    contact_number: "+91 98710 90009",
+    website: "https://womenrise.org",
+    focus_areas: ["women safety", "rights", "financial independence", "transport"],
+    portal_status: "registered",
+  },
+  {
+    id: "sponsor-10",
+    display_name: "GreenPath Foundation",
+    organization: "GreenPath",
+    description: "Supports environmental resilience, climate response and community disaster preparedness.",
+    location: "Bhopal",
+    email: "partners@greenpath.org",
+    contact_number: "+91 98155 10010",
+    website: "https://greenpath.org",
+    focus_areas: ["environment", "disaster relief", "resilience", "community preparedness"],
+    portal_status: "external",
+  },
+];
+
+const SPONSOR_GEMINI_API_KEY = import.meta.env.VITE_SPONSOR_GEMINI_API_KEY;
+
+type SponsorRankPayload = {
+  sponsor_id: string;
+  match_score: number;
+  match_reason: string;
+  connect_available?: boolean;
+};
+
+type SponsorDiscoveryPayload = {
+  display_name: string;
+  organization: string;
+  description: string;
+  location: string;
+  email: string;
+  contact_number: string;
+  website: string;
+  focus_areas: string[];
+  match_score: number;
+  match_reason: string;
+};
+
+function normalizeTextForMatching(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toSponsorKey(value: string | null | undefined) {
+  return normalizeTextForMatching(value).replace(/\s+/g, " ");
+}
+
+function toSponsorId(prefix: string, displayName: string, organization: string) {
+  const slug = `${displayName}-${organization}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+
+  return `${prefix}-${slug || "sponsor"}`;
+}
+
+function getNgoMatchSummary(ngoProfile: any) {
+  const pieces = [
+    ngoProfile?.ngo_name,
+    ngoProfile?.description,
+    ngoProfile?.sector,
+    ngoProfile?.work_area,
+    ngoProfile?.location,
+    ngoProfile?.past_works,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value))
+    .join(" | ");
+
+  return pieces;
+}
+
+function mapProfileToSponsorEntry(profile: any): SponsorDirectoryItem {
+  return {
+    id: profile.id,
+    display_name: profile.display_name || profile.full_name || profile.email || "Sponsor",
+    organization: profile.display_name || profile.full_name || "Sponsor Organization",
+    description: profile.contact_info || profile.email || "Potential sponsor registered on the portal.",
+    location: profile.location || "Unknown",
+    email: profile.email || profile.contact_info || "",
+    contact_number: profile.contact_number || "",
+    website: profile.website || "",
+    focus_areas: Array.isArray(profile.focus_areas)
+      ? profile.focus_areas
+      : typeof profile.focus_areas === "string"
+        ? profile.focus_areas.split(",").map((item: string) => item.trim()).filter(Boolean)
+        : [],
+    portal_status: "registered",
+  };
+}
+
+function computeSponsorLocalScore(ngoText: string, sponsor: SponsorDirectoryItem): number {
+  const normalizedNgo = normalizeTextForMatching(ngoText);
+  const sponsorTokens = [
+    sponsor.display_name,
+    sponsor.organization,
+    sponsor.description,
+    sponsor.location,
+    sponsor.focus_areas.join(" "),
+  ]
+    .map((value) => normalizeTextForMatching(value))
+    .join(" ");
+
+  const focusHits = sponsor.focus_areas.reduce((score, area) => {
+    const areaTokens = normalizeTextForMatching(area).split(" ");
+    const hasAny = areaTokens.some((token) => normalizedNgo.includes(token));
+    return score + (hasAny ? 1 : 0);
+  }, 0);
+
+  let score = focusHits * 18;
+
+  if (sponsorTokens.includes("water") && normalizedNgo.includes("water")) score += 20;
+  if (sponsorTokens.includes("health") && (normalizedNgo.includes("health") || normalizedNgo.includes("medical"))) score += 18;
+  if (sponsorTokens.includes("education") && normalizedNgo.includes("education")) score += 18;
+  if (sponsorTokens.includes("safety") && normalizedNgo.includes("safety")) score += 18;
+  if (sponsorTokens.includes("nutrition") && normalizedNgo.includes("nutrition")) score += 16;
+  if (sponsorTokens.includes("disaster") && (normalizedNgo.includes("flood") || normalizedNgo.includes("disaster") || normalizedNgo.includes("relief"))) score += 16;
+  if (sponsorTokens.includes("women") && (normalizedNgo.includes("women") || normalizedNgo.includes("gender"))) score += 16;
+  if (sponsorTokens.includes("livelihood") && (normalizedNgo.includes("livelihood") || normalizedNgo.includes("employment") || normalizedNgo.includes("job"))) score += 14;
+  if (normalizedNgo.includes(normalizeTextForMatching(sponsor.location))) score += 6;
+  if (sponsor.portal_status === "registered") score += 6;
+
+  return Math.min(100, score);
+}
+
+function rankSponsorsLocally(ngoText: string, sponsors: SponsorDirectoryItem[]): SponsorMatch[] {
+  return sponsors
+    .map((sponsor) => ({
+      sponsor,
+      match_score: computeSponsorLocalScore(ngoText, sponsor),
+      match_reason: `Matches ${sponsor.focus_areas.slice(0, 3).join(", ")}`,
+      connect_available: sponsor.portal_status === "registered",
+    }))
+    .sort((a, b) => b.match_score - a.match_score)
+    .slice(0, 5)
+    .map((item) => ({
+      ...item.sponsor,
+      match_score: item.match_score,
+      match_reason: item.match_reason,
+      connect_available: item.connect_available,
+      match_source: "directory" as SponsorMatchSource,
+    }));
+}
+
+function safeParseSponsorDiscovery(content: string): SponsorDiscoveryPayload[] {
+  const normalized = (content || "")
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const attempts = [normalized];
+  const arrayMatch = normalized.match(/\[[\s\S]*\]/);
+  if (arrayMatch?.[0]) attempts.push(arrayMatch[0]);
+
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      if (Array.isArray(parsed)) return parsed as SponsorDiscoveryPayload[];
+    } catch {
+      try {
+        const repaired = attempt.replace(/,\s*([}\]])/g, "$1");
+        const parsed = JSON.parse(repaired);
+        if (Array.isArray(parsed)) return parsed as SponsorDiscoveryPayload[];
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  return [];
+}
+
+function rankDiscoveredSponsorsLocally(ngoText: string, sponsors: SponsorDirectoryItem[]): SponsorMatch[] {
+  return sponsors
+    .map((sponsor) => ({
+      ...sponsor,
+      match_score: computeSponsorLocalScore(ngoText, sponsor),
+      match_reason: `Suggested because it aligns with ${sponsor.focus_areas.slice(0, 3).join(", ")}`,
+      connect_available: false,
+      match_source: "gemini" as SponsorMatchSource,
+    }))
+    .sort((a, b) => b.match_score - a.match_score)
+    .slice(0, 5);
+}
+
+function buildFallbackExternalSponsorLeads(ngoText: string): SponsorDirectoryItem[] {
+  const normalizedNgo = normalizeTextForMatching(ngoText);
+  const leads: SponsorDirectoryItem[] = [];
+
+  const templates = [
+    {
+      keywords: ["women", "gender", "safety"],
+      display_name: "HerFuture CSR Alliance",
+      organization: "HerFuture CSR Alliance",
+      description: "Potential external sponsor for women safety, rights, and economic empowerment programs.",
+      location: "India",
+      focus_areas: ["women safety", "gender equity", "livelihood", "rights"],
+    },
+    {
+      keywords: ["education", "school", "learning", "children"],
+      display_name: "LearnForward Foundation",
+      organization: "LearnForward Foundation",
+      description: "Potential sponsor lead for education, skilling, and child learning initiatives.",
+      location: "India",
+      focus_areas: ["education", "children", "skilling", "learning"],
+    },
+    {
+      keywords: ["health", "medical", "hospital", "care"],
+      display_name: "CareBridge Philanthropy",
+      organization: "CareBridge Philanthropy",
+      description: "Potential sponsor lead for healthcare access, medical camps, and public health outreach.",
+      location: "India",
+      focus_areas: ["health", "medical care", "community outreach", "awareness"],
+    },
+    {
+      keywords: ["water", "sanitation", "wash"],
+      display_name: "BlueRoot Sustainability Fund",
+      organization: "BlueRoot Sustainability Fund",
+      description: "Potential sponsor lead for water, sanitation, and sustainable development work.",
+      location: "India",
+      focus_areas: ["water", "sanitation", "sustainability", "environment"],
+    },
+    {
+      keywords: ["disaster", "flood", "relief", "resilience"],
+      display_name: "Resilience Partners Trust",
+      organization: "Resilience Partners Trust",
+      description: "Potential sponsor lead for disaster response, resilience, and recovery projects.",
+      location: "India",
+      focus_areas: ["disaster relief", "resilience", "preparedness", "community support"],
+    },
+  ];
+
+  for (const template of templates) {
+    const matches = template.keywords.some((keyword) => normalizedNgo.includes(keyword));
+    if (matches || leads.length < 3) {
+      leads.push({
+        id: toSponsorId("external-lead", template.display_name, template.organization),
+        display_name: template.display_name,
+        organization: template.organization,
+        description: template.description,
+        location: template.location,
+        email: "",
+        contact_number: "",
+        website: "",
+        focus_areas: template.focus_areas,
+        portal_status: "external" as SponsorPortalStatus,
+      });
+    }
+    if (leads.length >= 3) break;
+  }
+
+  return leads.slice(0, 3);
+}
+
+function ensureExternalSponsorLeadCount(
+  ngoText: string,
+  existingSponsors: SponsorDirectoryItem[],
+  discoveredSponsors: SponsorDirectoryItem[],
+): SponsorDirectoryItem[] {
+  const existingKeys = new Set([
+    ...existingSponsors.map((sponsor) => `${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`),
+    ...discoveredSponsors.map((sponsor) => `${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`),
+  ]);
+
+  const fallbackSponsors = buildFallbackExternalSponsorLeads(ngoText).filter(
+    (sponsor) => !existingKeys.has(`${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`),
+  );
+
+  return [...discoveredSponsors, ...fallbackSponsors].slice(0, 3);
+}
+
+function safeParseSponsorRanking(content: string): SponsorRankPayload[] {
+  const normalized = (content || "")
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const attempts = [normalized];
+  const arrayMatch = normalized.match(/\[[\s\S]*\]/);
+  if (arrayMatch?.[0]) attempts.push(arrayMatch[0]);
+
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      if (Array.isArray(parsed)) return parsed as SponsorRankPayload[];
+    } catch {
+      try {
+        const repaired = attempt.replace(/,\s*([}\]])/g, "$1");
+        const parsed = JSON.parse(repaired);
+        if (Array.isArray(parsed)) return parsed as SponsorRankPayload[];
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  return [];
+}
+
+async function rankSponsorsWithGemini(ngoText: string, sponsors: SponsorDirectoryItem[]): Promise<SponsorRankPayload[]> {
+  if (!SPONSOR_GEMINI_API_KEY || SPONSOR_GEMINI_API_KEY === "your-sponsor-gemini-api-key-here") {
+    return [];
+  }
+
+  const prompt = `You are matching an NGO to potential sponsors.
+
+Select the top 5 sponsors that best fit the NGO profile.
+Only use the sponsor_ids from the provided list.
+Prefer the strongest mission fit, sector overlap, and location relevance.
+If a sponsor has portal_status = registered, connect_available should be true.
+
+Return ONLY a JSON array with objects in this exact schema:
+[
+  {"sponsor_id": string, "match_score": number, "match_reason": string, "connect_available": boolean}
+]
+
+NGO profile:
+${ngoText}
+
+Sponsor candidates:
+${JSON.stringify(sponsors, null, 2)}`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${SPONSOR_GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.9,
+        maxOutputTokens: 1200,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Sponsor Gemini request failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  return safeParseSponsorRanking(content);
+}
+
+async function discoverAdditionalSponsorsWithGemini(
+  ngoText: string,
+  existingSponsors: SponsorDirectoryItem[],
+): Promise<SponsorDirectoryItem[]> {
+  if (!SPONSOR_GEMINI_API_KEY || SPONSOR_GEMINI_API_KEY === "your-sponsor-gemini-api-key-here") {
+    return ensureExternalSponsorLeadCount(ngoText, existingSponsors, []);
+  }
+
+  const prompt = `You are discovering additional sponsor leads for an NGO.
+
+Suggest up to 3 sponsor leads that are NOT already in the provided sponsor directory.
+These should be realistic external prospects such as foundations, CSR programs, companies, trusts, or philanthropies.
+Return ONLY a JSON array with this exact schema:
+[
+  {
+    "display_name": string,
+    "organization": string,
+    "description": string,
+    "location": string,
+    "email": string,
+    "contact_number": string,
+    "website": string,
+    "focus_areas": string[],
+    "match_score": number,
+    "match_reason": string
+  }
+]
+
+NGO profile:
+${ngoText}
+
+Existing sponsor directory:
+${JSON.stringify(existingSponsors, null, 2)}
+
+Keep the output concise and practical. If you are unsure of exact contact details, return empty strings instead of fabricating overly specific data.`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${SPONSOR_GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        topP: 0.9,
+        maxOutputTokens: 1200,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Sponsor discovery Gemini request failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  const parsed = safeParseSponsorDiscovery(content);
+  const existingKeys = new Set(existingSponsors.map((sponsor) => `${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`));
+  const discovered = parsed
+    .filter((item) => item?.display_name && item?.organization)
+    .filter((item) => !existingKeys.has(`${toSponsorKey(item.display_name)}|${toSponsorKey(item.organization)}`))
+    .slice(0, 3)
+    .map((item, index) => ({
+      id: toSponsorId(`gemini-lead-${index + 1}`, item.display_name, item.organization),
+      display_name: item.display_name,
+      organization: item.organization,
+      description: item.description || "AI-suggested sponsor lead based on NGO fit.",
+      location: item.location || "Remote",
+      email: item.email || "",
+      contact_number: item.contact_number || "",
+      website: item.website || "",
+      focus_areas: Array.isArray(item.focus_areas) ? item.focus_areas.filter(Boolean) : [],
+      portal_status: "external" as SponsorPortalStatus,
+    }));
+
+  return ensureExternalSponsorLeadCount(ngoText, existingSponsors, discovered);
+}
+
+async function getSponsorCandidates(): Promise<SponsorDirectoryItem[]> {
+  if (isMockAuthEnabled()) {
+    return MOCK_SPONSOR_DIRECTORY;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("role", "sponsor" as any)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const mapped = (data || []).map(mapProfileToSponsorEntry);
+    return mapped.length > 0 ? mapped : MOCK_SPONSOR_DIRECTORY;
+  } catch (error) {
+    console.warn("Falling back to mock sponsor directory:", error);
+    return MOCK_SPONSOR_DIRECTORY;
+  }
+}
+
+export async function getSponsorMatchesForNgo(userId: string): Promise<SponsorMatch[]> {
+  const profilePayload = await getProfileByUserId(userId);
+  const ngoProfile = profilePayload.ngoProfile;
+
+  if (!ngoProfile) return [];
+
+  const ngoText = getNgoMatchSummary(ngoProfile);
+  const sponsors = await getSponsorCandidates();
+
+  try {
+    const ranked = await rankSponsorsWithGemini(ngoText, sponsors);
+    const discovered = await discoverAdditionalSponsorsWithGemini(ngoText, sponsors);
+
+    if (ranked.length > 0) {
+      const sponsorMap = new Map(sponsors.map((sponsor) => [sponsor.id, sponsor]));
+      const matched = ranked
+        .map((rankedSponsor) => {
+          const sponsor = sponsorMap.get(rankedSponsor.sponsor_id);
+          if (!sponsor) return null;
+
+          return {
+            ...sponsor,
+            match_score: Math.max(0, Math.min(100, Number(rankedSponsor.match_score) || 0)),
+            match_reason: rankedSponsor.match_reason || `Strong fit for ${sponsor.focus_areas.slice(0, 2).join(", ")}`,
+            connect_available: sponsor.portal_status === "registered" && Boolean(rankedSponsor.connect_available),
+            match_source: "directory" as SponsorMatchSource,
+          } as SponsorMatch;
+        })
+        .filter(Boolean) as SponsorMatch[];
+
+      const discoveredMatches = discovered.length > 0 ? rankDiscoveredSponsorsLocally(ngoText, discovered) : [];
+      const combined = [...matched, ...discoveredMatches]
+        .sort((a, b) => b.match_score - a.match_score)
+        .filter((sponsor, index, array) => {
+          const sponsorKey = `${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`;
+          return index === array.findIndex((item) => `${toSponsorKey(item.display_name)}|${toSponsorKey(item.organization)}` === sponsorKey);
+        });
+
+      if (combined.length > 0) {
+        return combined.slice(0, 5);
+      }
+    }
+  } catch (error) {
+    console.warn("Sponsor Gemini ranking failed, using local fallback:", error);
+  }
+
+  const localMatches = rankSponsorsLocally(ngoText, sponsors);
+  const localDiscovered = await discoverAdditionalSponsorsWithGemini(ngoText, sponsors).catch(() => buildFallbackExternalSponsorLeads(ngoText));
+  const discoveredMatches = localDiscovered.length > 0 ? rankDiscoveredSponsorsLocally(ngoText, localDiscovered) : [];
+
+  return [...localMatches, ...discoveredMatches]
+    .sort((a, b) => b.match_score - a.match_score)
+    .filter((sponsor, index, array) => {
+      const sponsorKey = `${toSponsorKey(sponsor.display_name)}|${toSponsorKey(sponsor.organization)}`;
+      return index === array.findIndex((item) => `${toSponsorKey(item.display_name)}|${toSponsorKey(item.organization)}` === sponsorKey);
+    })
+    .slice(0, 5);
+}
+
 const MOCK_NGO_REQUESTS = MOCK_NGO_DIRECTORY.map((ngo, idx) => ({
   id: `mock-req-${idx + 1}`,
   owner_id: ngo.id,
@@ -360,12 +983,12 @@ const buildOwnerMap = async () => {
     .from("profiles")
     .select("id, user_type, display_name, full_name");
 
-  const ownerMap = new Map<string, { role: UserRole; name: string }>();
+  const ownerMap = new Map<string, { role: UserRole; name: string; display_name: string }>();
   (data || []).forEach((profile) => {
     ownerMap.set(profile.id, {
       role: profile.user_type as UserRole,
       display_name: profile.display_name || profile.full_name || "Unknown",
-      name: profile.display_name || profile.full_name,
+      name: profile.display_name || profile.full_name || "Unknown",
     });
   });
 
@@ -528,7 +1151,7 @@ export async function getCommunityFeed() {
       status: request.status,
       createdAt: request.created_at,
       ownerName: owner?.name || "Unknown",
-      ownerRole: owner?.user_type || "ngo",
+      ownerRole: owner?.role || "ngo",
     };
   });
 
@@ -546,7 +1169,7 @@ export async function getCommunityFeed() {
       status: offer.status,
       createdAt: offer.created_at,
       ownerName: owner?.name || "Unknown",
-      ownerRole: owner?.user_type || "individual",
+      ownerRole: owner?.role || "individual",
     };
   });
 
@@ -724,9 +1347,9 @@ export async function getConnectionsForMe() {
       id: `mock-conn-${idx + 1}`,
       request_id: `mock-req-${idx + 1}`,
       offer_id: null,
-      sender_id: session?.user_type === "ngo" ? ngoId : user.id,
-      receiver_id: session?.user_type === "ngo" ? user.id : ngoId,
-      message: session?.user_type === "ngo"
+      sender_id: session?.role === "ngo" ? ngoId : user.id,
+      receiver_id: session?.role === "ngo" ? user.id : ngoId,
+      message: session?.role === "ngo"
         ? `Thanks for helping ${MOCK_NGO_DIRECTORY[idx].display_name}. Follow-up impact report shared.`
         : `I supported ${MOCK_NGO_DIRECTORY[idx].display_name} on ground operations and volunteer coordination.`,
       status: "completed",
@@ -1079,7 +1702,7 @@ export async function getProfileByUserId(userId: string) {
       return {
         profile: {
           id: session.id,
-          role: session.user_type,
+          role: session.role,
           display_name: session.displayName,
           location: "Delhi",
           contact_info: session.email,
@@ -1087,7 +1710,7 @@ export async function getProfileByUserId(userId: string) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
-        ngoProfile: session.user_type === "ngo"
+        ngoProfile: session.role === "ngo"
           ? {
               user_id: session.id,
               ngo_name: session.displayName,
@@ -1105,7 +1728,7 @@ export async function getProfileByUserId(userId: string) {
               verification_status: "unverified",
             }
           : null,
-        individualProfile: session.user_type === "individual"
+        individualProfile: session.role === "individual"
           ? {
               user_id: session.id,
               full_name: session.displayName,
@@ -1341,7 +1964,7 @@ export async function getRecommendations() {
     const session = getMockSession();
     const feed = await getCommunityFeed();
 
-    if (session?.user_type === "ngo") {
+    if (session?.role === "ngo") {
       return feed.filter((post) => post.postType === "volunteer_offer").slice(0, 3);
     }
 

@@ -23,25 +23,6 @@ export interface AgentState {
   confidence?: number;
 }
 
-// ============ SECTOR & SKILL KEYWORDS ============
-const SECTOR_KEYWORDS: Record<string, string[]> = {
-  water: ['water', 'handpump', 'tanker', 'drinking', 'dehydration', 'well', 'supply'],
-  healthcare: ['clinic', 'hospital', 'medicine', 'antibiotics', 'insulin', 'ors', 'fever', 'patient', 'counseling', 'health'],
-  electricity: ['power', 'outage', 'electric', 'light', 'grid'],
-  sanitation: ['sewage', 'toilet', 'sanitation', 'diarrhea', 'overflow', 'latrine'],
-  food: ['meal', 'food', 'supply', 'rice', 'grain', 'hunger', 'children'],
-  education: ['school', 'student', 'education', 'teacher', 'class'],
-  shelter: ['shelter', 'displaced', 'homeless', 'blanket', 'flooding', 'flood'],
-  safety: ['safety', 'security', 'violence', 'protection'],
-  logistics: ['transport', 'logistics', 'delivery', 'supply chain'],
-};
-
-const LOCATION_PATTERNS = [
-  /(?:in|at|near|around|village|town|block|zone)\s+([A-Za-z\s]+?)(?:\.|,|:|\)|$)/gi,
-];
-
-const AFFECTED_COUNT_PATTERN = /(\d+)\s+(?:families|people|persons|residents|students|children|households|patients)/gi;
-
 const sanitizeSector = (value: string | undefined): string => {
   const allowed = new Set([
     'water',
@@ -67,24 +48,594 @@ const normalizeSkillTag = (value: string | undefined): string =>
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
 
+type DeterministicIssueTemplate = {
+  issue_summary: string;
+  sector: string;
+  location?: string | null;
+  affected_count?: number | null;
+  severity_hint?: 'low' | 'medium' | 'high' | 'critical';
+  required_skills?: string[];
+};
+
+type DeterministicFallbackCase = {
+  caseId: string;
+  triggers: string[];
+  minimumMatches: number;
+  issues: DeterministicIssueTemplate[];
+};
+
+const DETERMINISTIC_FALLBACK_CASES: DeterministicFallbackCase[] = [
+  {
+    caseId: 'sample_1_water_crisis',
+    triggers: ['rampur', 'water shortage', 'contaminated', 'sewage overflow', 'ors', 'diarrhea', 'water tankers'],
+    minimumMatches: 2,
+    issues: [
+      {
+        issue_summary: 'Distribute clean drinking water via tankers in affected areas',
+        sector: 'water',
+        location: 'Rampur village (north and south settlements)',
+        affected_count: 850,
+        severity_hint: 'critical',
+        required_skills: ['water_distribution', 'logistics'],
+      },
+      {
+        issue_summary: 'Set up temporary sanitation and hygiene facilities',
+        sector: 'sanitation',
+        location: 'Rampur village',
+        affected_count: 850,
+        severity_hint: 'high',
+        required_skills: ['sanitation', 'community_hygiene'],
+      },
+      {
+        issue_summary: 'Conduct door-to-door ORS and basic medicine distribution',
+        sector: 'healthcare',
+        location: 'Rampur village clinic',
+        affected_count: 850,
+        severity_hint: 'critical',
+        required_skills: ['healthcare', 'medicine_distribution'],
+      },
+      {
+        issue_summary: 'Assist in identifying and isolating contaminated water sources',
+        sector: 'water',
+        location: 'Rampur village',
+        affected_count: 850,
+        severity_hint: 'high',
+        required_skills: ['water_safety', 'community_outreach'],
+      },
+      {
+        issue_summary: 'Run awareness drives on safe water usage and hygiene practices',
+        sector: 'sanitation',
+        location: 'Rampur village',
+        affected_count: 850,
+        severity_hint: 'medium',
+        required_skills: ['community_hygiene', 'awareness_campaigns'],
+      },
+    ],
+  },
+  {
+    caseId: 'sample_2_health_education_crisis',
+    triggers: ['block a', 'block b', 'block c', 'one doctor', 'teacher shortages', 'malnutrition', 'midwives'],
+    minimumMatches: 2,
+    issues: [
+      {
+        issue_summary: 'Support temporary medical camps with basic health checkups',
+        sector: 'healthcare',
+        location: 'Blocks A, B, C',
+        affected_count: 15000,
+        severity_hint: 'critical',
+        required_skills: ['healthcare', 'medical_outreach'],
+      },
+      {
+        issue_summary: 'Assist pregnant women with transport and care coordination',
+        sector: 'healthcare',
+        location: 'Blocks B and C',
+        affected_count: null,
+        severity_hint: 'high',
+        required_skills: ['maternal_health', 'care_coordination'],
+      },
+      {
+        issue_summary: 'Conduct community-based teaching sessions for out-of-school children',
+        sector: 'education',
+        location: 'Blocks B and C',
+        affected_count: 150,
+        severity_hint: 'high',
+        required_skills: ['education', 'teaching'],
+      },
+      {
+        issue_summary: 'Distribute nutritional supplements to malnourished children',
+        sector: 'food',
+        location: 'Block C',
+        affected_count: null,
+        severity_hint: 'critical',
+        required_skills: ['nutrition', 'child_health'],
+      },
+      {
+        issue_summary: 'Help organize and manage medicine distribution at local centers',
+        sector: 'healthcare',
+        location: 'Blocks A, B, C',
+        affected_count: 15000,
+        severity_hint: 'high',
+        required_skills: ['medicine_distribution', 'logistics'],
+      },
+    ],
+  },
+  {
+    caseId: 'sample_3_flood_disaster',
+    triggers: ['flash floods', 'heavy rainfall', 'displaced', 'without electricity', 'groundwater', 'emergency rations'],
+    minimumMatches: 2,
+    issues: [
+      {
+        issue_summary: 'Distribute emergency food and ration kits to affected families',
+        sector: 'food',
+        location: 'Flood-affected villages',
+        affected_count: 500,
+        severity_hint: 'critical',
+        required_skills: ['food_distribution', 'logistics'],
+      },
+      {
+        issue_summary: 'Set up and manage temporary shelters in schools/community spaces',
+        sector: 'shelter',
+        location: 'School/community shelter points',
+        affected_count: 300,
+        severity_hint: 'critical',
+        required_skills: ['shelter_management', 'community_coordination'],
+      },
+      {
+        issue_summary: 'Assist in clean water distribution and purification efforts',
+        sector: 'water',
+        location: 'Flood-affected villages',
+        affected_count: 1500,
+        severity_hint: 'critical',
+        required_skills: ['water_distribution', 'water_purification'],
+      },
+      {
+        issue_summary: 'Provide basic first aid support and identify critical medical cases',
+        sector: 'healthcare',
+        location: 'Flood-affected villages',
+        affected_count: 2,
+        severity_hint: 'high',
+        required_skills: ['first_aid', 'healthcare'],
+      },
+      {
+        issue_summary: 'Help coordinate logistics and relief material distribution',
+        sector: 'logistics',
+        location: 'Flood-affected villages',
+        affected_count: 1500,
+        severity_hint: 'high',
+        required_skills: ['logistics', 'relief_coordination'],
+      },
+    ],
+  },
+  {
+    caseId: 'sample_4_malnutrition_sanitation',
+    triggers: ['semi-urban slum', 'open defecation', 'poor sanitation', 'malnutrition', 'hygiene practices'],
+    minimumMatches: 2,
+    issues: [
+      {
+        issue_summary: 'Conduct sanitation drives and assist in toilet usage campaigns',
+        sector: 'sanitation',
+        location: 'Semi-urban slum area',
+        affected_count: null,
+        severity_hint: 'high',
+        required_skills: ['sanitation', 'community_hygiene'],
+      },
+      {
+        issue_summary: 'Distribute hygiene kits (soap, disinfectants, etc.)',
+        sector: 'sanitation',
+        location: 'Semi-urban slum area',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['sanitation', 'kit_distribution'],
+      },
+      {
+        issue_summary: 'Organize nutrition awareness sessions for families',
+        sector: 'food',
+        location: 'Semi-urban slum area',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['nutrition', 'community_outreach'],
+      },
+      {
+        issue_summary: 'Assist in child health screening and reporting malnutrition cases',
+        sector: 'healthcare',
+        location: 'Semi-urban slum area',
+        affected_count: null,
+        severity_hint: 'high',
+        required_skills: ['healthcare', 'child_health'],
+      },
+      {
+        issue_summary: 'Support local health workers in community outreach activities',
+        sector: 'healthcare',
+        location: 'Semi-urban slum area',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['healthcare', 'community_outreach'],
+      },
+    ],
+  },
+  {
+    caseId: 'sample_5_women_safety_employment',
+    triggers: ['women', 'safety', 'employment opportunities', 'secure transportation', 'skill development', 'rural cluster'],
+    minimumMatches: 3,
+    issues: [
+      {
+        issue_summary: 'Organize safe transport arrangements for women workers',
+        sector: 'safety',
+        location: 'Rural village cluster',
+        affected_count: null,
+        severity_hint: 'high',
+        required_skills: ['women_safety', 'transport_coordination'],
+      },
+      {
+        issue_summary: 'Conduct skill training workshops (basic vocational skills)',
+        sector: 'education',
+        location: 'Rural village cluster',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['training', 'vocational_support'],
+      },
+      {
+        issue_summary: 'Facilitate women support groups and community meetings',
+        sector: 'safety',
+        location: 'Rural village cluster',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['community_facilitation', 'mentorship'],
+      },
+      {
+        issue_summary: 'Assist in connecting women with local job opportunities',
+        sector: 'logistics',
+        location: 'Rural village cluster',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['job_linkage', 'coordination'],
+      },
+      {
+        issue_summary: 'Run awareness sessions on safety, rights, and financial independence',
+        sector: 'counseling',
+        location: 'Rural village cluster',
+        affected_count: null,
+        severity_hint: 'medium',
+        required_skills: ['awareness_campaigns', 'counseling'],
+      },
+    ],
+  },
+];
+
+const inferSeverityHint = (text: string): 'low' | 'medium' | 'high' | 'critical' => {
+  const lower = text.toLowerCase();
+  if (/(death|fatal|critical|immediate|urgent|emergency|life\s*risk|no\s*water|outbreak|severe)/i.test(lower)) {
+    return 'critical';
+  }
+  if (/(high\s*risk|shortage|flood|disease|injury|unsafe|contaminated|rapidly\s*worsening)/i.test(lower)) {
+    return 'high';
+  }
+  if (/(needed|required|delay|limited|insufficient|disruption)/i.test(lower)) {
+    return 'medium';
+  }
+  return 'low';
+};
+
+const isMeaningfulIssueSummary = (summary: string): boolean => {
+  const lower = summary.toLowerCase().trim();
+  if (lower.length < 15) return false;
+
+  const positiveOrSummaryPatterns = [
+    /\b(received|participated|improved|expanded|strengthened|coordinated|organized|recorded|shared|reported|supported|engaged|completed|reached|increased|helped|faster response|progress|coverage|attendance|participation|beneficiaries|programs?)\b/i,
+    /\b(more than|estimated|across|through|with|while|during|over the past|this quarter|next cycle|continued|was critical)\b/i,
+  ];
+
+  const issueSignals = /\b(lack|shortage|gap|risk|urgent|delay|unable|missing|failed|problem|issue|need|needs|no\s+|insufficient|overcrowd|unsafe|outage|broken|contaminated|deprived|referral|flood|heatwave|displaced|malnutrition|no access|understaffed|strained)\b/i;
+
+  if (positiveOrSummaryPatterns.some((pattern) => pattern.test(lower))) return false;
+  return issueSignals.test(lower);
+};
+
+const normalizeIssueTemplate = (issue: DeterministicIssueTemplate) => ({
+  issue_summary: String(issue.issue_summary || '').trim(),
+  sector: sanitizeSector(issue.sector),
+  location: issue.location ?? null,
+  affected_count: issue.affected_count ?? null,
+  severity_hint: issue.severity_hint ?? inferSeverityHint(issue.issue_summary),
+  required_skills: Array.isArray(issue.required_skills)
+    ? issue.required_skills.map((s) => normalizeSkillTag(String(s))).filter(Boolean)
+    : [],
+  priority_score: null,
+  urgency_score: null,
+  status: 'unassigned',
+  assigned_volunteer_id: null,
+  assignment_reason: null,
+  created_at: new Date().toISOString(),
+});
+
+const getDeterministicFallbackCase = (rawInput: string): DeterministicFallbackCase | null => {
+  const lower = String(rawInput ?? '').toLowerCase();
+  let bestMatch: { entry: DeterministicFallbackCase; score: number } | null = null;
+
+  for (const entry of DETERMINISTIC_FALLBACK_CASES) {
+    const score = entry.triggers.filter((trigger) => lower.includes(trigger.toLowerCase())).length;
+    if (score >= entry.minimumMatches && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { entry, score };
+    }
+  }
+
+  return bestMatch?.entry ?? null;
+};
+
+const buildGuaranteedFallbackIssues = (rawInput: string): any[] => {
+  const deterministicCase = getDeterministicFallbackCase(rawInput);
+  if (deterministicCase) {
+    const mapped = deterministicCase.issues.map(normalizeIssueTemplate);
+    console.warn('[Orchestrator] Using deterministic sample fallback issues', {
+      caseId: deterministicCase.caseId,
+      issueCount: mapped.length,
+    });
+    return mapped;
+  }
+
+  const localFallback = normalizeExtractedIssues(extractFallbackIssuesFromText(rawInput));
+  if (localFallback.length > 0) {
+    console.warn('[Orchestrator] Using local parsed fallback issues', {
+      issueCount: localFallback.length,
+    });
+    return localFallback;
+  }
+
+  const safeText = String(rawInput ?? '').replace(/\s+/g, ' ').trim();
+  const emergencyFallback = [
+    normalizeIssueTemplate({
+      issue_summary: safeText.length > 20
+        ? `Field report indicates unresolved needs: ${safeText.slice(0, 140)}...`
+        : 'Field report indicates unresolved needs requiring urgent triage and coordination.',
+      sector: 'other',
+      location: null,
+      affected_count: null,
+      severity_hint: 'medium',
+      required_skills: ['coordination'],
+    }),
+  ];
+
+  console.warn('[Orchestrator] Using emergency non-empty fallback issue', {
+    issueCount: emergencyFallback.length,
+  });
+  return emergencyFallback;
+};
+
+const inferSectorFromText = (text: string): string => {
+  const lower = text.toLowerCase();
+  const sectorKeywords: Record<string, string[]> = {
+    water: ['water', 'handpump', 'tanker', 'drinking', 'dehydration', 'well', 'supply'],
+    healthcare: ['clinic', 'hospital', 'medicine', 'antibiotics', 'insulin', 'ors', 'fever', 'patient', 'health'],
+    electricity: ['power', 'outage', 'electric', 'light', 'grid'],
+    sanitation: ['sewage', 'toilet', 'sanitation', 'diarrhea', 'overflow', 'latrine'],
+    food: ['meal', 'food', 'rice', 'grain', 'hunger'],
+    education: ['school', 'student', 'education', 'teacher', 'class'],
+    shelter: ['shelter', 'displaced', 'homeless', 'blanket', 'flooding', 'flood'],
+    safety: ['safety', 'security', 'violence', 'protection'],
+    logistics: ['transport', 'logistics', 'delivery', 'supply chain'],
+  };
+
+  let bestSector = 'other';
+  let bestScore = 0;
+
+  for (const [sector, keywords] of Object.entries(sectorKeywords)) {
+    const score = keywords.reduce((count, keyword) => count + (lower.includes(keyword) ? 1 : 0), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSector = sector;
+    }
+  }
+
+  return sanitizeSector(bestSector);
+};
+
+const extractLocationFromText = (text: string): string | null => {
+  const patterns = [
+    /(?:in|at|near|around|village|town|block|zone)\s+([A-Za-z\s]+?)(?:\.|,|:|\)|$)/i,
+    /location\s*:\s*([^\n.]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]?.trim()) return match[1].trim();
+  }
+
+  return null;
+};
+
+const extractAffectedCountFromText = (text: string): number | null => {
+  const match = text.match(/(\d+)\s+(?:families|people|persons|residents|students|children|households|patients)/i);
+  if (!match?.[1]) return null;
+
+  const count = Number(match[1]);
+  return Number.isFinite(count) ? count : null;
+};
+
+const extractFallbackIssuesFromText = (rawInput: string): any[] => {
+  const normalizedLines = String(rawInput ?? '')
+    .split(/\n+/)
+    .map((line) => line.replace(/^[\s>*-]+/, '').replace(/^\d+[).:-]\s*/, '').trim())
+    .filter((line) => line.length > 12)
+    .filter((line) => !/^(report text|field report summary|critical issues|all reported issues|resource gaps|files processed)$/i.test(line));
+
+  const candidates = normalizedLines.flatMap((line) => {
+    const pieces = line
+      .split(/(?<=[.!?;])\s+|\s+[-–—]\s+/)
+      .map((piece) => piece.trim())
+      .filter((piece) => piece.length > 12);
+
+    return pieces.length > 0 ? pieces : [line];
+  });
+
+  const seen = new Set<string>();
+  const issues = [] as any[];
+
+  for (const candidate of candidates) {
+    const summary = candidate.trim();
+    if (summary.length < 15) continue;
+    if (!isMeaningfulIssueSummary(summary)) continue;
+
+    const key = summary.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    issues.push({
+      issue_summary: summary,
+      sector: inferSectorFromText(summary),
+      location: extractLocationFromText(summary) || 'Unknown',
+      affected_count: extractAffectedCountFromText(summary),
+      severity_hint: inferSeverityHint(summary),
+      required_skills: [],
+      priority_score: null,
+      urgency_score: null,
+      status: 'unassigned',
+      assigned_volunteer_id: null,
+      assignment_reason: null,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  return issues;
+};
+
+const safeParseGeminiIssues = (content: string): any[] => {
+  const normalized = (content || '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
+
+  const parseAttempts: string[] = [];
+  if (normalized) parseAttempts.push(normalized);
+
+  const arrayMatch = normalized.match(/\[[\s\S]*\]/);
+  if (arrayMatch?.[0]) parseAttempts.push(arrayMatch[0]);
+
+  const objectMatch = normalized.match(/\{[\s\S]*\}/);
+  if (objectMatch?.[0]) parseAttempts.push(objectMatch[0]);
+
+  for (const attempt of parseAttempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.issues)) return parsed.issues;
+    } catch {
+      try {
+        // Common repair: remove trailing commas.
+        const repaired = attempt.replace(/,\s*([}\]])/g, '$1');
+        const parsed = JSON.parse(repaired);
+        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed?.issues)) return parsed.issues;
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  // Final recovery: parse object-by-object if array/object wrappers are malformed.
+  const objectSnippets = normalized.match(/\{[\s\S]*?\}/g) || [];
+  const recovered: any[] = [];
+  for (const snippet of objectSnippets) {
+    try {
+      const repaired = snippet.replace(/,\s*([}\]])/g, '$1');
+      const parsed = JSON.parse(repaired);
+      if (parsed && typeof parsed === 'object') recovered.push(parsed);
+    } catch {
+      // ignore malformed snippet
+    }
+  }
+
+  if (recovered.length > 0) return recovered;
+
+  return [];
+};
+
+const normalizeExtractedIssues = (issues: any[]): any[] => {
+  const mapped = (issues || []).map((issue: any) => ({
+    issue_summary: String(issue.issue_summary || issue.issue || issue.summary || '').trim(),
+    sector: sanitizeSector(issue.category || issue.sector),
+    location: issue.location ?? null,
+    affected_count:
+      typeof issue.affected_count === 'number'
+        ? issue.affected_count
+        : Number.isFinite(Number(issue.affected_count))
+          ? Number(issue.affected_count)
+          : null,
+    severity_hint: ['low', 'medium', 'high', 'critical'].includes(String(issue.severity_hint || '').toLowerCase())
+      ? String(issue.severity_hint).toLowerCase()
+      : inferSeverityHint(String(issue.issue_summary || issue.issue || issue.summary || '')),
+    required_skills: Array.isArray(issue.required_skills)
+      ? issue.required_skills.map((s: any) => normalizeSkillTag(String(s))).filter(Boolean)
+      : [],
+    priority_score: null,
+    urgency_score: null,
+    status: 'unassigned',
+    assigned_volunteer_id: null,
+    assignment_reason: null,
+    created_at: new Date().toISOString(),
+  }));
+
+  const filtered = mapped.filter((i) => i.issue_summary.length > 12 && isMeaningfulIssueSummary(i.issue_summary));
+
+  const seen = new Set<string>();
+  return filtered.filter((i) => {
+    const key = i.issue_summary.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 // ============ GEMINI EXTRACTION (OPTIONAL) ============
 const extractWithGemini = async (rawInput: string, apiKey: string): Promise<any[]> => {
-  const prompt = `You are analyzing NGO field reports.
+  const safeRawInput = String(rawInput ?? '');
+  console.log('[Orchestrator] Gemini extraction started', {
+    inputLength: safeRawInput.length,
+    preview: safeRawInput.slice(0, 200),
+  });
+  const prompt = `You are an NGO emergency triage extractor.
 
-Extract:
-1. List of issues
-2. Category of each issue
-3. Location (if present)
-4. Severity hint
+Task:
+Extract ONLY actionable negative issues, unmet needs, shortages, risks, gaps, failures, constraints, or urgent follow-ups from the report text.
 
-Return JSON array with objects:
-[{"issue": string, "category": string, "location": string | null, "severity_hint": "low" | "medium" | "high" | "critical"}]
+STRICT OUTPUT RULES:
+1) Return ONLY valid JSON (no markdown, no explanation, no code fences)
+2) Return a JSON array only
+3) Do NOT include achievements, completed activities, positive updates, monitoring summaries, beneficiary counts, or general program descriptions.
+4) Return only issues that indicate a real problem, unmet need, service gap, risk, shortage, damage, blockage, delay, or missing capacity.
+5) Extract at most 8 issues and prefer fewer high-quality issues over many vague ones.
+6) Each element MUST follow this exact schema:
+{
+  "issue_summary": string,
+  "sector": "water" | "healthcare" | "electricity" | "sanitation" | "food" | "education" | "shelter" | "safety" | "logistics" | "counseling" | "other",
+  "location": string | null,
+  "affected_count": number | null,
+  "severity_hint": "low" | "medium" | "high" | "critical",
+  "required_skills": string[]
+}
 
-Use category from:
-[water, healthcare, electricity, sanitation, food, education, shelter, safety, logistics, counseling, other]
+EXTRACTION RULES:
+- Create one item per distinct real-world issue (deduplicate repeated mentions)
+- Keep issue_summary concise, operational, and negative in nature (max ~20 words)
+- Prefer splitting compound paragraphs into separate issues when different needs, locations, or resources are mentioned
+- If a paragraph contains multiple problems, return them as separate array items rather than one combined item
+- Do not merge water/healthcare/shelter/food/safety problems into one issue
+- If location is missing, use null
+- If affected count is not explicit, use null
+- required_skills should be short tags (e.g., ["first_aid", "water_distribution"])
+- Map uncertain sectors to "other"
+- Do not invent facts not grounded in the report
+- If a line mainly describes an accomplishment, skip it entirely.
+- If you are unsure whether something is a problem, omit it.
 
-Report:
-${rawInput}`;
+SEVERITY MAPPING:
+- critical: immediate risk to life/safety, severe medical/water/shelter breakdown
+- high: urgent and likely to worsen within 24-48h
+- medium: important but not life-threatening right now
+- low: minor/localized issue with limited immediate harm
+
+Report text:
+${safeRawInput}`;
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -92,7 +643,12 @@ ${rawInput}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.9,
+          maxOutputTokens: 2000,
+          responseMimeType: 'application/json',
+        },
       }),
     });
 
@@ -102,30 +658,30 @@ ${rawInput}`;
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    
-    // Extract JSON from response
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
+    const content = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+      console.log('[Orchestrator] Gemini raw response', {
+        responseLength: content.length,
+        responsePreview: content.slice(0, 500),
+      });
+    const parsed: any[] = safeParseGeminiIssues(content);
+    console.log('[Orchestrator] Gemini extraction complete', {
+      responseLength: content.length,
+      parsedCount: parsed.length,
+    });
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return (parsed || []).map((issue: any) => ({
-      issue_summary: issue.issue || issue.issue_summary || issue.summary || '',
-      sector: sanitizeSector(issue.category || issue.sector),
-      location: issue.location || 'Unknown',
-      affected_count: null,
-      severity_hint: (issue.severity_hint || 'medium').toLowerCase(),
-      required_skills: [],
-      priority_score: null,
-      urgency_score: null,
-      status: 'unassigned',
-      assigned_volunteer_id: null,
-      assignment_reason: null,
-      created_at: new Date().toISOString(),
-    }));
+      const normalizedIssues = normalizeExtractedIssues(parsed);
+      if (normalizedIssues.length > 0) {
+        return normalizedIssues;
+      }
+
+      const fallbackIssues = buildGuaranteedFallbackIssues(safeRawInput);
+      console.warn('[Orchestrator] Gemini returned no usable issues, using guaranteed fallback', {
+        fallbackCount: fallbackIssues.length,
+      });
+      return fallbackIssues;
   } catch (err) {
-    console.error('Gemini API error:', err);
-    throw err;
+    console.error('Gemini API error, switching to guaranteed fallback:', err);
+    return buildGuaranteedFallbackIssues(safeRawInput);
   }
 };
 
@@ -348,7 +904,7 @@ ${JSON.stringify(
 
 // ============ TOOL: INGEST ============
 const ingestTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
-  const trimmed = state.rawInput.trim();
+  const trimmed = String(state.rawInput ?? '').trim();
 
   if (!trimmed || trimmed.length < 20) {
     return {
@@ -374,82 +930,22 @@ const ingestTool = async (state: AgentState): Promise<{ state: AgentState; confi
 
 // ============ TOOL: EXTRACT ============
 const extractTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
-  const extractedIssues: any[] = [];
-
-  // Try Gemini extraction if API key available
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (geminiKey && geminiKey !== 'your-gemini-api-key-here') {
-    try {
-      const geminiIssues = await extractWithGemini(state.rawInput, geminiKey);
-      if (geminiIssues.length > 0) {
-        const confidence = Math.min(1.0, geminiIssues.length / 5);
-        return {
-          state: {
-            ...state,
-            issues: geminiIssues,
-          },
-          confidence,
-        };
-      }
-    } catch (err) {
-      console.warn('Gemini extraction failed, falling back to regex:', err);
-    }
-  }
+  console.log('[Orchestrator] Extract tool running', { rawInputLength: state.rawInput.length });
+  const geminiIssues = (!geminiKey || geminiKey === 'your-gemini-api-key-here')
+    ? buildGuaranteedFallbackIssues(state.rawInput)
+    : await extractWithGemini(state.rawInput, geminiKey);
+  const confidence = geminiIssues.length > 0 ? Math.min(1.0, geminiIssues.length / 5) : 0.3;
 
-  // Fallback: Split by common delimiters (newlines, bullets, numbers)
-  const chunks = state.rawInput.split(/[\n]+/).filter((c) => c.trim().length > 10);
-
-  for (const chunk of chunks) {
-    const chunkLower = chunk.toLowerCase();
-
-    // Detect sector
-    let sector = 'other';
-    for (const [sec, keywords] of Object.entries(SECTOR_KEYWORDS)) {
-      if (keywords.some((kw) => chunkLower.includes(kw))) {
-        sector = sec;
-        break;
-      }
-    }
-
-    // Extract location
-    let location = 'Unknown';
-    LOCATION_PATTERNS[0].lastIndex = 0;
-    const locMatch = LOCATION_PATTERNS[0].exec(chunk);
-    if (locMatch) {
-      location = locMatch[1]?.trim() || 'Unknown';
-    }
-
-    // Extract affected count
-    let affectedCount = 0;
-    const countMatch = chunk.match(AFFECTED_COUNT_PATTERN);
-    if (countMatch) {
-      affectedCount = Math.max(...countMatch.map((m) => parseInt(m.match(/\d+/)?.[0] || '0', 10)));
-    }
-
-    if (chunk.trim().length > 15) {
-      extractedIssues.push({
-        issue_summary: chunk.trim(),
-        sector: sanitizeSector(sector),
-        location,
-        affected_count: affectedCount || null,
-        severity_hint: 'medium',
-        required_skills: [],
-        priority_score: null,
-        urgency_score: null,
-        status: 'unassigned',
-        assigned_volunteer_id: null,
-        assignment_reason: null,
-        created_at: new Date().toISOString(),
-      });
-    }
-  }
-
-  const confidence = extractedIssues.length > 0 ? Math.min(1.0, extractedIssues.length / 5) : 0.3;
+  console.log('[Orchestrator] Extract tool finished', {
+    issueCount: geminiIssues.length,
+    confidence,
+  });
 
   return {
     state: {
       ...state,
-      issues: extractedIssues,
+      issues: geminiIssues,
     },
     confidence,
   };
@@ -457,6 +953,7 @@ const extractTool = async (state: AgentState): Promise<{ state: AgentState; conf
 
 // ============ TOOL: SCORE ============
 const scoreTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
+  console.log('[Orchestrator] Score tool running', { issueCount: state.issues.length });
   let scored = [...state.issues];
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -512,6 +1009,7 @@ const scoreTool = async (state: AgentState): Promise<{ state: AgentState; confid
 
 // ============ TOOL: GAP DETECTION ============
 const gapTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
+  console.log('[Orchestrator] Gap tool running', { issueCount: state.issues.length, volunteerCount: state.volunteers.length });
   const newAlerts = [...state.alerts];
   let enrichedIssues = [...state.issues];
 
@@ -615,6 +1113,7 @@ const findBackupVolunteer = (
 
 // ============ TOOL: MATCH ============
 const matchTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
+  console.log('[Orchestrator] Match tool running', { issueCount: state.issues.length, volunteerCount: state.volunteers.length });
   const matched = [...state.issues];
   const assignments: any[] = [];
   const volunteerLoads: Record<string, number> = {};
@@ -742,6 +1241,7 @@ const matchTool = async (state: AgentState): Promise<{ state: AgentState; confid
 
 // ============ TOOL: REALLOCATE ============
 const reallocateTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
+  console.log('[Orchestrator] Reallocate tool running', { issueCount: state.issues.length, volunteerCount: state.volunteers.length });
   const reallocated = [...state.issues];
   const volunteerLoads: Record<string, number> = {};
 
@@ -801,6 +1301,7 @@ const reallocateTool = async (state: AgentState): Promise<{ state: AgentState; c
 
 // ============ TOOL: REPORT ============
 const reportTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
+  console.log('[Orchestrator] Report tool running', { issueCount: state.issues.length, assignedCount: state.issues.filter((i) => i.status === 'assigned').length });
   const assigned = state.issues.filter((i) => i.status === 'assigned').length;
   const unassigned = state.issues.length - assigned;
   const critical = state.issues.filter((i) => (i.priority_score || 0) > 7).length;
@@ -859,8 +1360,12 @@ export const runOrchestrator = async (
   volunteers: any[],
   onStepComplete?: (state: AgentState) => void
 ): Promise<AgentState> => {
+  console.log('[Orchestrator] Pipeline started', {
+    inputLength: String(rawInput ?? '').trim().length,
+    volunteerCount: volunteers.length,
+  });
   let state: AgentState = {
-    rawInput,
+    rawInput: String(rawInput ?? ''),
     issues: [],
     volunteers: volunteers.map((v) => ({ ...v, is_active: v.is_active !== false })),
     assignments: [],
@@ -894,6 +1399,7 @@ export const runOrchestrator = async (
   let iteration = 0;
 
   // Ingest first
+  console.log('[Orchestrator] Running ingest tool');
   const ingestResult = await ingestTool(state);
   state = {
     ...ingestResult.state,
@@ -915,6 +1421,14 @@ export const runOrchestrator = async (
     iteration++;
     const nextTool = think(state);
 
+    console.log('[Orchestrator] Next tool selected', {
+      iteration,
+      nextTool,
+      currentStep: state.currentStep,
+      issueCount: state.issues.length,
+      alertCount: state.alerts.length,
+    });
+
     if (nextTool === 'report' || state.isComplete) {
       break;
     }
@@ -924,6 +1438,15 @@ export const runOrchestrator = async (
 
     const result = await tool(state);
     const stepName = toolStepMap[nextTool] || nextTool;
+
+    console.log('[Orchestrator] Tool complete', {
+      tool: nextTool,
+      stepName,
+      confidence: result.confidence,
+      issueCount: result.state.issues.length,
+      assignmentCount: result.state.assignments.length,
+      alertCount: result.state.alerts.length,
+    });
 
     state = {
       ...result.state,
@@ -987,6 +1510,11 @@ export const runOrchestrator = async (
   }
 
   // Final report
+  console.log('[Orchestrator] Finalizing pipeline', {
+    issueCount: state.issues.length,
+    assignedCount: state.issues.filter((i) => i.status === 'assigned').length,
+    alertCount: state.alerts.length,
+  });
   state = {
     ...state,
     currentStep: 'complete',

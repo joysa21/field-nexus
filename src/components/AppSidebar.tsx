@@ -32,11 +32,13 @@ import {
   User,
   DollarSign,
   Building2,
+  Handshake,
 } from "lucide-react";
 
 const ngoNavItems = [
   { labelKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard },
   { labelKey: "About", url: "/about", icon: Building2 },
+  { labelKey: "nav.sponsors", url: "/sponsors", icon: Handshake },
   { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
   { labelKey: "nav.manageFunds", url: "/manage-funds", icon: DollarSign },
   { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
@@ -77,7 +79,7 @@ export function AppSidebar() {
     void getProfileByUserId(user.id)
       .then((payload) => {
         if (active) {
-          setNgoProfile(payload.ngoProfile);
+          setNgoProfile(payload.ngoProfile as NgoProfile | null);
         }
       })
       .catch((error) => {

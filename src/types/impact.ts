@@ -15,6 +15,29 @@ export type NotificationItem = Database["public"]["Tables"]["notifications"]["Ro
 
 export type CommunityPostType = "ngo_request" | "volunteer_offer";
 
+export type SponsorPortalStatus = "registered" | "external";
+export type SponsorMatchSource = "directory" | "gemini";
+
+export interface SponsorDirectoryItem {
+  id: string;
+  display_name: string;
+  organization: string;
+  description: string;
+  location: string;
+  email: string;
+  contact_number: string;
+  website: string;
+  focus_areas: string[];
+  portal_status: SponsorPortalStatus;
+}
+
+export interface SponsorMatch extends SponsorDirectoryItem {
+  match_score: number;
+  match_reason: string;
+  connect_available: boolean;
+  match_source: SponsorMatchSource;
+}
+
 export interface CommunityPost {
   id: string;
   postType: CommunityPostType;

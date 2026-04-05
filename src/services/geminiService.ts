@@ -74,8 +74,8 @@ export async function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const content = e.target?.result as string;
-      resolve(content);
+      const content = e.target?.result;
+      resolve(typeof content === 'string' ? content : String(content ?? ''));
     };
     reader.onerror = reject;
     reader.readAsText(file);
@@ -122,9 +122,9 @@ export async function extractTextFromFiles(
         }
       }
 
-      if (!content.trim()) {
+      if (!String(content ?? '').trim()) {
         onProgress?.(`Using local extractor for: ${file.name}`);
-        content = await readFileAsText(file);
+        content = String(await readFileAsText(file) ?? '');
       }
 
       fileContents.push({
@@ -387,7 +387,9 @@ export async function processRawTextWithGemini(
     throw new Error("Gemini API key not configured. Please add VITE_GEMINI_API_KEY to .env");
   }
 
-  if (!rawText.trim()) {
+  const safeRawText = String(rawText ?? '').trim();
+
+  if (!safeRawText) {
     throw new Error("No text provided");
   }
 
@@ -419,7 +421,7 @@ RESOURCE GAPS:
 ---
 
 TEXT TO PROCESS:
-${rawText}
+${safeRawText}
 
 STRUCTURED FIELD REPORT:`;
 

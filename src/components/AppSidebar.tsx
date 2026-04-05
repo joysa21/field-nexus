@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { getProfileByUserId } from "@/services/impactService";
+import type { NgoProfile } from "@/types/impact";
 import {
   Sidebar,
   SidebarContent,
@@ -28,10 +31,12 @@ import {
   LogOut,
   User,
   DollarSign,
+  Building2,
 } from "lucide-react";
 
 const ngoNavItems = [
   { labelKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { labelKey: "About", url: "/about", icon: Building2 },
   { labelKey: "nav.runAgents", url: "/run", icon: Play, accent: true },
   { labelKey: "nav.manageFunds", url: "/manage-funds", icon: DollarSign },
   { labelKey: "nav.issues", url: "/issues", icon: ListChecks },
@@ -56,9 +61,36 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [ngoProfile, setNgoProfile] = useState<NgoProfile | null>(null);
   const resolvedNavItems = user?.userType === "individual"
     ? volunteerNavItems
     : ngoNavItems;
+
+  useEffect(() => {
+    let active = true;
+
+    if (!user || user.userType !== "ngo") {
+      setNgoProfile(null);
+      return;
+    }
+
+    void getProfileByUserId(user.id)
+      .then((payload) => {
+        if (active) {
+          setNgoProfile(payload.ngoProfile);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load NGO sidebar profile:", error);
+        if (active) {
+          setNgoProfile(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -115,6 +147,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
       </SidebarContent>
 
       <SidebarFooter className="flex flex-col gap-2 px-4 py-3">

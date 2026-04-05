@@ -1,3 +1,4 @@
+import type { UserType } from "@/contexts/AuthContext";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +17,7 @@ type LoginFormValues = {
 };
 
 interface LoginFormProps {
-  userType: "individual" | "ngo";
+  userType: UserType;
   onSuccess: () => void;
 }
 

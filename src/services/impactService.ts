@@ -14,6 +14,45 @@ type SessionLikeUser = {
   email: string | null;
 };
 
+type NgoExtraFields = {
+  address?: string;
+  email?: string;
+  contact_number?: string;
+  bank_details?: string;
+  image_url?: string;
+  work_area?: string;
+  past_works?: string;
+};
+
+const NGO_EXTRA_STORAGE_PREFIX = "ngo-about:";
+
+function getNgoExtraStorageKey(userId: string) {
+  return `${NGO_EXTRA_STORAGE_PREFIX}${userId}`;
+}
+
+function readNgoExtraFields(userId: string): NgoExtraFields {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(getNgoExtraStorageKey(userId));
+    return raw ? JSON.parse(raw) as NgoExtraFields : {};
+  } catch (error) {
+    console.warn("Failed to read NGO extra fields from local storage:", error);
+    return {};
+  }
+}
+
+function writeNgoExtraFields(userId: string, patch: NgoExtraFields) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const merged = { ...readNgoExtraFields(userId), ...patch };
+    window.localStorage.setItem(getNgoExtraStorageKey(userId), JSON.stringify(merged));
+  } catch (error) {
+    console.warn("Failed to write NGO extra fields to local storage:", error);
+  }
+}
+
 const MOCK_NGO_DIRECTORY = [
   {
     id: "ngo-1",
@@ -1056,6 +1095,14 @@ export async function getProfileByUserId(userId: string) {
               sector: session.volunteeringDomain,
               location: "Delhi",
               contact_info: session.email,
+              address: "Delhi",
+              email: session.email,
+              contact_number: "",
+              bank_details: "",
+              image_url: "",
+              work_area: session.volunteeringDomain,
+              past_works: "",
+              verification_status: "unverified",
             }
           : null,
         individualProfile: session.user_type === "individual"
@@ -1095,6 +1142,14 @@ export async function getProfileByUserId(userId: string) {
           sector: ngo.details.sector,
           location: ngo.location,
           contact_info: ngo.contact_info,
+          address: ngo.location,
+          email: ngo.contact_info,
+          contact_number: "",
+          bank_details: "",
+          image_url: "",
+          work_area: ngo.details.sector,
+          past_works: "",
+          verification_status: ngo.verification_status,
         },
         individualProfile: null,
         requests: [
@@ -1129,9 +1184,43 @@ export async function getProfileByUserId(userId: string) {
   if (requests.error) throw requests.error;
   if (offers.error) throw offers.error;
 
+  const ngoExtras = readNgoExtraFields(userId);
+  const mergedNgoProfile = ngo.data
+    ? {
+        ...ngo.data,
+        ...ngoExtras,
+        address: ngoExtras.address ?? ngo.data.location ?? null,
+        email: ngoExtras.email ?? ngo.data.contact_info ?? null,
+        contact_number: ngoExtras.contact_number ?? null,
+        bank_details: ngoExtras.bank_details ?? null,
+        image_url: ngoExtras.image_url ?? null,
+        work_area: ngoExtras.work_area ?? ngo.data.sector ?? null,
+        past_works: ngoExtras.past_works ?? null,
+      }
+    : base.data?.role === "ngo"
+      ? {
+          user_id: userId,
+          ngo_name: base.data.display_name,
+          description: null,
+          sector: null,
+          location: base.data.location,
+          contact_info: base.data.contact_info,
+          address: ngoExtras.address ?? base.data.location ?? null,
+          email: ngoExtras.email ?? base.data.contact_info ?? null,
+          contact_number: ngoExtras.contact_number ?? null,
+          bank_details: ngoExtras.bank_details ?? null,
+          image_url: ngoExtras.image_url ?? null,
+          work_area: ngoExtras.work_area ?? null,
+          past_works: ngoExtras.past_works ?? null,
+          created_at: null,
+          updated_at: null,
+          verification_status: null,
+        }
+      : null;
+
   return {
     profile: base.data,
-    ngoProfile: ngo.data,
+    ngoProfile: mergedNgoProfile,
     individualProfile: individual.data,
     requests: requests.data || [],
     offers: offers.data || [],
@@ -1144,17 +1233,67 @@ export async function updateNgoProfile(userId: string, patch: {
   sector?: string;
   location?: string;
   contact_info?: string;
+  address?: string;
+  email?: string;
+  contact_number?: string;
+  bank_details?: string;
+  image_url?: string;
+  work_area?: string;
+  past_works?: string;
 }) {
-  const { error } = await supabase.from("ngo_profiles").update(patch).eq("user_id", userId);
-  if (error) throw error;
+  const extraPatch: NgoExtraFields = {
+    address: patch.address,
+    email: patch.email,
+    contact_number: patch.contact_number,
+    bank_details: patch.bank_details,
+    image_url: patch.image_url,
+    work_area: patch.work_area,
+    past_works: patch.past_works,
+  };
 
-  if (patch.ngo_name || patch.location || patch.contact_info) {
+  writeNgoExtraFields(userId, extraPatch);
+
+  const stablePatch = {
+    user_id: userId,
+    ngo_name: patch.ngo_name,
+    description: patch.description,
+    sector: patch.sector,
+    location: patch.location,
+    contact_info: patch.email ?? patch.contact_info,
+  };
+
+  const fullPatch = {
+    ...stablePatch,
+    address: patch.address,
+    email: patch.email,
+    contact_number: patch.contact_number,
+    bank_details: patch.bank_details,
+    image_url: patch.image_url,
+    work_area: patch.work_area,
+    past_works: patch.past_works,
+  };
+
+  const { error } = await supabase.from("ngo_profiles").upsert(fullPatch, { onConflict: "user_id" });
+  if (error) {
+    const isMissingColumnError = error.code === "PGRST204"
+      || error.message.toLowerCase().includes("column")
+      || error.message.toLowerCase().includes("schema cache");
+
+    if (isMissingColumnError) {
+      const { error: fallbackError } = await supabase.from("ngo_profiles").upsert(stablePatch, { onConflict: "user_id" });
+      if (fallbackError) throw fallbackError;
+    } else {
+      throw error;
+    }
+  }
+
+  if (patch.ngo_name || patch.location || patch.contact_info || patch.email) {
     const { error: profileError } = await supabase
       .from("profiles")
       .update({
         display_name: patch.ngo_name,
         location: patch.location,
-        contact_info: patch.contact_info,
+        contact_info: patch.email ?? patch.contact_info,
       })
       .eq("id", userId);
     if (profileError) throw profileError;

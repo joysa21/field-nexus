@@ -175,6 +175,14 @@ export type Database = {
           sector: string | null;
           location: string | null;
           contact_info: string | null;
+          address: string | null;
+          email: string | null;
+          contact_number: string | null;
+          bank_details: string | null;
+          image_url: string | null;
+          work_area: string | null;
+          past_works: string | null;
+          verification_status: string | null;
           created_at: string | null;
           updated_at: string | null;
         }
@@ -185,6 +193,14 @@ export type Database = {
           sector?: string | null;
           location?: string | null;
           contact_info?: string | null;
+          address?: string | null;
+          email?: string | null;
+          contact_number?: string | null;
+          bank_details?: string | null;
+          image_url?: string | null;
+          work_area?: string | null;
+          past_works?: string | null;
+          verification_status?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         }
@@ -195,6 +211,14 @@ export type Database = {
           sector?: string | null;
           location?: string | null;
           contact_info?: string | null;
+          address?: string | null;
+          email?: string | null;
+          contact_number?: string | null;
+          bank_details?: string | null;
+          image_url?: string | null;
+          work_area?: string | null;
+          past_works?: string | null;
+          verification_status?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         }

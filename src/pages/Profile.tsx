@@ -51,6 +51,13 @@ export default function Profile() {
         ngo_name: payload.ngoProfile?.ngo_name || "",
         description: payload.ngoProfile?.description || "",
         sector: payload.ngoProfile?.sector || "",
+        address: payload.ngoProfile?.address || "",
+        email: payload.ngoProfile?.email || payload.profile?.contact_info || "",
+        contact_number: payload.ngoProfile?.contact_number || "",
+        bank_details: payload.ngoProfile?.bank_details || "",
+        image_url: payload.ngoProfile?.image_url || "",
+        work_area: payload.ngoProfile?.work_area || "",
+        past_works: payload.ngoProfile?.past_works || "",
         full_name: payload.individualProfile?.full_name || "",
         skills: (payload.individualProfile?.skills || []).join(", "),
         interests: (payload.individualProfile?.interests || []).join(", "),
@@ -97,6 +104,13 @@ export default function Profile() {
           sector: form.sector,
           location: form.location,
           contact_info: form.contact_info,
+          address: form.address,
+          email: form.email,
+          contact_number: form.contact_number,
+          bank_details: form.bank_details,
+          image_url: form.image_url,
+          work_area: form.work_area,
+          past_works: form.past_works,
         });
       } else {
         await updateIndividualProfile(activeUserId, {
@@ -115,6 +129,18 @@ export default function Profile() {
     } catch (error: any) {
       toast.error(error.message || "Could not update profile.");
     }
+  };
+
+  const handleNgoImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      setForm((prev) => ({ ...prev, image_url: result }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAcceptAssignment = async (issueId: string) => {
@@ -205,7 +231,19 @@ export default function Profile() {
                 <>
                   <Input value={form.ngo_name || ""} onChange={(e) => setForm((prev) => ({ ...prev, ngo_name: e.target.value }))} placeholder="NGO name" />
                   <Input value={form.sector || ""} onChange={(e) => setForm((prev) => ({ ...prev, sector: e.target.value }))} placeholder="Sector" />
+                  <Input value={form.address || ""} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" />
+                  <Input value={form.email || ""} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
+                  <Input value={form.contact_number || ""} onChange={(e) => setForm((prev) => ({ ...prev, contact_number: e.target.value }))} placeholder="Contact number" />
+                  <Input value={form.work_area || ""} onChange={(e) => setForm((prev) => ({ ...prev, work_area: e.target.value }))} placeholder="Work area" />
                   <Textarea className="md:col-span-2" value={form.description || ""} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description" />
+                  <Textarea className="md:col-span-2" value={form.bank_details || ""} onChange={(e) => setForm((prev) => ({ ...prev, bank_details: e.target.value }))} placeholder="Bank details" />
+                  <Textarea className="md:col-span-2" value={form.past_works || ""} onChange={(e) => setForm((prev) => ({ ...prev, past_works: e.target.value }))} placeholder="Past works" />
+                  <div className="md:col-span-2 space-y-2">
+                    <Input type="file" accept="image/*" onChange={handleNgoImageChange} />
+                    {form.image_url ? (
+                      <img src={form.image_url} alt="NGO preview" className="h-24 w-24 rounded-lg object-cover border" />
+                    ) : null}
+                  </div>
                 </>
               ) : (
                 <>

@@ -22,6 +22,7 @@ import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
 import FundSupport from "./pages/FundSupport";
 import ManageFunds from "./pages/ManageFunds";
+import AboutNgo from "./pages/AboutNgo";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ const App = () => (
                 }
               >
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/about" element={<AboutNgo />} />
                 <Route path="/community" element={<Community />} />
                 <Route path="/community/:type/:id" element={<PostDetail />} />
                 <Route path="/volunteer-portal" element={<VolunteerPortal />} />

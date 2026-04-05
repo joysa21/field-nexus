@@ -42,42 +42,6 @@ const LOCATION_PATTERNS = [
 
 const AFFECTED_COUNT_PATTERN = /(\d+)\s+(?:families|people|persons|residents|students|children|households|patients)/gi;
 
-const GEMINI_MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-
-type GeminiGenerationConfig = {
-  temperature: number;
-  maxOutputTokens: number;
-};
-
-const generateWithGeminiFallback = async (
-  apiKey: string,
-  prompt: string,
-  generationConfig: GeminiGenerationConfig
-): Promise<string> => {
-  const errors: string[] = [];
-
-  for (const model of GEMINI_MODEL_CANDIDATES) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig,
-      }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    }
-
-    const errText = await response.text();
-    errors.push(`${model}: ${response.status} ${errText}`);
-  }
-
-  throw new Error(`Gemini request failed for all models. ${errors.join(' | ')}`);
-};
-
 const sanitizeSector = (value: string | undefined): string => {
   const allowed = new Set([
     'water',
@@ -96,118 +60,49 @@ const sanitizeSector = (value: string | undefined): string => {
   return allowed.has(normalized) ? normalized : 'other';
 };
 
-const normalizeText = (value: string | null | undefined): string =>
-  (value || '').toLowerCase().trim();
-
-const toSkillSet = (volunteer: any): Set<string> =>
-  new Set((volunteer?.skills || []).map((s: string) => normalizeText(s)).filter(Boolean));
-
-const issueSectorKeywords = (sector: string): string[] => {
-  const normalizedSector = normalizeText(sector) || 'other';
-  const bySector = SECTOR_KEYWORDS[normalizedSector] || [];
-  return [normalizedSector, ...bySector].map((k) => normalizeText(k)).filter(Boolean);
-};
-
-const issueRequiresSkillMatch = (issue: any): boolean => normalizeText(issue?.sector) !== 'other';
-
-const hasSectorSkillMatch = (issue: any, volunteer: any): boolean => {
-  if (!issueRequiresSkillMatch(issue)) return true;
-  const skills = toSkillSet(volunteer);
-  const sectorKeys = issueSectorKeywords(issue?.sector);
-  return sectorKeys.some((key) => skills.has(key));
-};
-
-const findMatchedSkills = (issue: any, volunteer: any): string[] => {
-  const skills = Array.from(toSkillSet(volunteer));
-  const sectorKeys = new Set(issueSectorKeywords(issue?.sector));
-  return skills.filter((skill) => sectorKeys.has(skill));
-};
-
-const hasLocationMatch = (issue: any, volunteer: any): boolean => {
-  const issueLoc = normalizeText(issue?.location);
-  const volZone = normalizeText(volunteer?.zone);
-  if (!issueLoc || issueLoc === 'unknown' || !volZone) return false;
-  return issueLoc.includes(volZone) || volZone.includes(issueLoc);
-};
-
-const estimateIssueEffortHours = (issue: any): number => {
-  const priority = Number(issue?.priority_score || 0);
-  const affected = Number(issue?.affected_count || 0);
-  const sector = normalizeText(issue?.sector);
-
-  const priorityLoad = priority >= 8 ? 2.5 : priority >= 6 ? 2 : priority >= 4 ? 1.5 : 1;
-  const affectedLoad = affected >= 1000 ? 2 : affected >= 300 ? 1.25 : affected >= 100 ? 0.75 : 0.25;
-  const criticalSectorLoad = ['water', 'healthcare', 'sanitation', 'safety'].includes(sector) ? 0.75 : 0;
-
-  return Math.min(6, parseFloat((1.5 + priorityLoad + affectedLoad + criticalSectorLoad).toFixed(1)));
-};
-
-const getVolunteerCapacityHours = (volunteer: any): number => {
-  const declared = Number(volunteer?.availability_hours_per_week || 10);
-  return Math.max(2, parseFloat((declared * 0.75).toFixed(1)));
-};
-
-const canTakeIssue = (
-  volunteerId: string,
-  issueEffortHours: number,
-  volunteerLoads: Record<string, number>,
-  volunteerCapacities: Record<string, number>
-): boolean => {
-  const current = volunteerLoads[volunteerId] || 0;
-  const cap = volunteerCapacities[volunteerId] || 0;
-  return current + issueEffortHours <= cap + 0.001;
-};
-
-const scoreVolunteerForIssue = (
-  issue: any,
-  volunteer: any,
-  volunteerLoads: Record<string, number>,
-  volunteerCapacities: Record<string, number>
-): { score: number; matchedSkills: string[]; reasons: string[] } => {
-  const matchedSkills = findMatchedSkills(issue, volunteer);
-  const skillMatched = hasSectorSkillMatch(issue, volunteer);
-  const locationMatched = hasLocationMatch(issue, volunteer);
-  const currentLoad = volunteerLoads[volunteer.id] || 0;
-  const capacity = volunteerCapacities[volunteer.id] || 1;
-  const loadRatio = Math.min(1, currentLoad / capacity);
-
-  if (issueRequiresSkillMatch(issue) && !skillMatched) {
-    return { score: Number.NEGATIVE_INFINITY, matchedSkills: [], reasons: ['no sector-skill match'] };
-  }
-
-  const skillScore = skillMatched ? 45 : 15;
-  const skillDepthScore = Math.min(20, matchedSkills.length * 7);
-  const locationScore = locationMatched ? 12 : 0;
-  const balanceScore = Math.max(0, (1 - loadRatio) * 20);
-
-  const score = skillScore + skillDepthScore + locationScore + balanceScore;
-
-  const reasons: string[] = [];
-  if (matchedSkills.length > 0) reasons.push(`skills: ${matchedSkills.join(', ')}`);
-  if (locationMatched) reasons.push(`zone match: ${volunteer.zone || 'local'}`);
-  reasons.push(`load: ${currentLoad.toFixed(1)}/${capacity.toFixed(1)}h`);
-
-  return { score, matchedSkills, reasons };
-};
+const normalizeSkillTag = (value: string | undefined): string =>
+  (value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
 
 // ============ GEMINI EXTRACTION (OPTIONAL) ============
 const extractWithGemini = async (rawInput: string, apiKey: string): Promise<any[]> => {
-  const prompt = `Extract field coordination issues from this report. For each issue, provide:
-- issue_summary: Brief description (max 100 chars)
-- sector: One of [water, healthcare, electricity, sanitation, food, education, shelter, safety, logistics, counseling, other]
-- location: Specific location name
-- affected_count: Number of people affected (if mentioned)
+  const prompt = `You are analyzing NGO field reports.
+
+Extract:
+1. List of issues
+2. Category of each issue
+3. Location (if present)
+4. Severity hint
+
+Return JSON array with objects:
+[{"issue": string, "category": string, "location": string | null, "severity_hint": "low" | "medium" | "high" | "critical"}]
+
+Use category from:
+[water, healthcare, electricity, sanitation, food, education, shelter, safety, logistics, counseling, other]
 
 Report:
-${rawInput}
-
-Return a JSON array of objects with these fields. Only valid sectors allowed.`;
+${rawInput}`;
 
   try {
-    const content = (await generateWithGeminiFallback(apiKey, prompt, {
-      temperature: 0.3,
-      maxOutputTokens: 1500,
-    })) || '[]';
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini request failed (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     
     // Extract JSON from response
     const jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -215,10 +110,12 @@ Return a JSON array of objects with these fields. Only valid sectors allowed.`;
 
     const parsed = JSON.parse(jsonMatch[0]);
     return (parsed || []).map((issue: any) => ({
-      issue_summary: issue.issue_summary || issue.summary || '',
-      sector: sanitizeSector(issue.sector),
+      issue_summary: issue.issue || issue.issue_summary || issue.summary || '',
+      sector: sanitizeSector(issue.category || issue.sector),
       location: issue.location || 'Unknown',
-      affected_count: issue.affected_count || null,
+      affected_count: null,
+      severity_hint: (issue.severity_hint || 'medium').toLowerCase(),
+      required_skills: [],
       priority_score: null,
       urgency_score: null,
       status: 'unassigned',
@@ -273,10 +170,22 @@ Volunteers:
 ${JSON.stringify(compactVolunteers)}
 `;
 
-  const content = (await generateWithGeminiFallback(apiKey, prompt, {
-    temperature: 0.2,
-    maxOutputTokens: 1500,
-  })) || '[]';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1500 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini assignment failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) return [];
 
@@ -317,14 +226,124 @@ Data:
 ${JSON.stringify(planContext)}
 `;
 
-  try {
-    return await generateWithGeminiFallback(apiKey, prompt, {
-      temperature: 0.4,
-      maxOutputTokens: 600,
-    });
-  } catch {
-    return '';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+    }),
+  });
+
+  if (!response.ok) return '';
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+};
+
+const scoreWithGemini = async (issues: any[], apiKey: string): Promise<Array<{ issue_index: number; urgency_score: number }>> => {
+  const prompt = `Rate urgency from 1-10 based on:
+- impact on life
+- number of people affected
+- immediacy
+
+Return ONLY JSON array:
+[{"issue_index": number, "urgency_score": number}]
+
+Issues:
+${JSON.stringify(
+    issues.map((i, idx) => ({
+      issue_index: idx,
+      issue: i.issue_summary,
+      sector: i.sector,
+      location: i.location,
+      affected_count: i.affected_count,
+      severity_hint: i.severity_hint,
+    }))
+  )}`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini scoring failed (${response.status}): ${errText}`);
   }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return [];
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((item) => typeof item?.issue_index === 'number')
+    .map((item) => ({
+      issue_index: item.issue_index,
+      urgency_score: Math.max(1, Math.min(10, Number(item.urgency_score) || 5)),
+    }));
+};
+
+const detectSkillsWithGemini = async (
+  issues: any[],
+  apiKey: string
+): Promise<Array<{ issue_index: number; required_skills: string[] }>> => {
+  const prompt = `For each NGO issue, list volunteer skills required to address it.
+Return ONLY JSON array:
+[{"issue_index": number, "required_skills": string[]}]
+
+Use concise skill tags (examples: healthcare, counseling, logistics, water, sanitation, education, shelter, legal_aid, psychosocial_support, emergency_response).
+
+Issues:
+${JSON.stringify(
+    issues.map((i, idx) => ({
+      issue_index: idx,
+      issue: i.issue_summary,
+      sector: i.sector,
+      location: i.location,
+      priority_score: i.priority_score,
+      urgency_score: i.urgency_score,
+    }))
+  )}`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1000 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini skill-gap detection failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return [];
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((item) => typeof item?.issue_index === 'number')
+    .map((item) => ({
+      issue_index: item.issue_index,
+      required_skills: Array.isArray(item.required_skills)
+        ? item.required_skills.map((s: string) => normalizeSkillTag(s)).filter(Boolean)
+        : [],
+    }));
 };
 
 // ============ TOOL: INGEST ============
@@ -413,6 +432,8 @@ const extractTool = async (state: AgentState): Promise<{ state: AgentState; conf
         sector: sanitizeSector(sector),
         location,
         affected_count: affectedCount || null,
+        severity_hint: 'medium',
+        required_skills: [],
         priority_score: null,
         urgency_score: null,
         status: 'unassigned',
@@ -436,20 +457,46 @@ const extractTool = async (state: AgentState): Promise<{ state: AgentState; conf
 
 // ============ TOOL: SCORE ============
 const scoreTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
-  const scored = state.issues.map((issue) => {
-    // Urgency: based on affected count and sector criticality
-    const criticalSectors = ['water', 'healthcare', 'sanitation'];
-    const baseCritical = criticalSectors.includes(issue.sector) ? 0.3 : 0;
-    const affectedScore = Math.min(1.0, (issue.affected_count || 0) / 500);
-    const urgency = (baseCritical + affectedScore) / 2 * 10;
+  let scored = [...state.issues];
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-    // Priority: urgency + vulnerability factor
-    const vulnerabilityBoost = issue.affected_count && issue.affected_count > 100 ? 1.5 : 1.0;
-    const priority = Math.min(10, (urgency * vulnerabilityBoost) / 1.5);
+  if (geminiKey && geminiKey !== 'your-gemini-api-key-here') {
+    try {
+      const geminiScores = await scoreWithGemini(state.issues, geminiKey);
+      if (geminiScores.length > 0) {
+        const byIndex = new Map(geminiScores.map((s) => [s.issue_index, s.urgency_score]));
+        scored = state.issues.map((issue, idx) => {
+          const urgency = byIndex.get(idx) ?? 5;
+          return {
+            ...issue,
+            urgency_score: parseFloat(Number(urgency).toFixed(1)),
+            priority_score: parseFloat(Number(urgency).toFixed(1)),
+          };
+        });
+
+        return {
+          state: {
+            ...state,
+            issues: scored,
+          },
+          confidence: 0.92,
+        };
+      }
+    } catch (err) {
+      console.warn('Gemini scoring failed, using fallback scoring:', err);
+    }
+  }
+
+  scored = state.issues.map((issue) => {
+    const criticalSectors = ['water', 'healthcare', 'sanitation', 'shelter', 'safety'];
+    const baseCritical = criticalSectors.includes(issue.sector) ? 0.5 : 0.2;
+    const affectedScore = Math.min(1.0, (issue.affected_count || 0) / 500);
+    const severityBoost = issue.severity_hint === 'critical' ? 0.4 : issue.severity_hint === 'high' ? 0.25 : 0.1;
+    const urgency = Math.min(10, (baseCritical + affectedScore + severityBoost) * 10 / 1.6);
 
     return {
       ...issue,
-      priority_score: parseFloat(priority.toFixed(1)),
+      priority_score: parseFloat(urgency.toFixed(1)),
       urgency_score: parseFloat(urgency.toFixed(1)),
     };
   });
@@ -459,26 +506,60 @@ const scoreTool = async (state: AgentState): Promise<{ state: AgentState; confid
       ...state,
       issues: scored,
     },
-    confidence: 0.9,
+    confidence: 0.78,
   };
 };
 
 // ============ TOOL: GAP DETECTION ============
 const gapTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
   const newAlerts = [...state.alerts];
+  let enrichedIssues = [...state.issues];
 
-  for (const issue of state.issues) {
-    const sector = issue.sector || 'other';
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (geminiKey && geminiKey !== 'your-gemini-api-key-here') {
+    try {
+      const skillsByIssue = await detectSkillsWithGemini(state.issues, geminiKey);
+      if (skillsByIssue.length > 0) {
+        const byIndex = new Map(skillsByIssue.map((s) => [s.issue_index, s.required_skills]));
+        enrichedIssues = state.issues.map((issue, idx) => {
+          const llmSkills = byIndex.get(idx) || [];
+          const fallbackSkills = [normalizeSkillTag(issue.sector)].filter(Boolean);
+          return {
+            ...issue,
+            required_skills: llmSkills.length > 0 ? llmSkills : fallbackSkills,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Gemini skill-gap detection failed, using fallback skills:', err);
+    }
+  }
 
-    // Check if any active volunteer has matching skill
-    const hasSkill = state.volunteers.some(
-      (v) => v.is_active && v.skills && v.skills.includes(sector)
-    );
+  if (enrichedIssues.some((i) => !Array.isArray(i.required_skills) || i.required_skills.length === 0)) {
+    enrichedIssues = enrichedIssues.map((issue) => ({
+      ...issue,
+      required_skills:
+        Array.isArray(issue.required_skills) && issue.required_skills.length > 0
+          ? issue.required_skills
+          : [normalizeSkillTag(issue.sector)].filter(Boolean),
+    }));
+  }
 
-    if (!hasSkill && sector !== 'other') {
+  const volunteerSkills = state.volunteers
+    .filter((v) => v.is_active)
+    .map((v) => (Array.isArray(v.skills) ? v.skills : []))
+    .flat()
+    .map((s: string) => normalizeSkillTag(s));
+  const volunteerSkillSet = new Set(volunteerSkills);
+
+  for (const issue of enrichedIssues) {
+    const requiredSkills: string[] = Array.isArray(issue.required_skills) ? issue.required_skills : [];
+    const missingSkills = requiredSkills.filter((skill) => !volunteerSkillSet.has(skill));
+
+    if (missingSkills.length > 0) {
       newAlerts.push({
         type: 'skill_gap',
-        message: `No volunteer with ${sector} skill for "${issue.issue_summary?.substring(0, 50)}..."`,
+        message: `Missing skills [${missingSkills.join(', ')}] for "${issue.issue_summary?.substring(0, 50)}..."`,
         severity: 'warning',
       });
     }
@@ -496,6 +577,7 @@ const gapTool = async (state: AgentState): Promise<{ state: AgentState; confiden
   return {
     state: {
       ...state,
+      issues: enrichedIssues,
       alerts: newAlerts,
     },
     confidence: 0.85,
@@ -507,27 +589,28 @@ const findBackupVolunteer = (
   assignedVolunteerId: string,
   issue: any,
   volunteers: any[],
-  volunteerLoads: Record<string, number>,
-  volunteerCapacities: Record<string, number>
+  volunteerLoads: Record<string, number>
 ): any | null => {
+  const issueSkills: string[] = Array.isArray(issue.required_skills) && issue.required_skills.length > 0
+    ? issue.required_skills
+    : [normalizeSkillTag(issue.sector)].filter(Boolean);
+
   const activeVolunteers = volunteers.filter(
-    (v) =>
-      v.is_active &&
-      v.id !== assignedVolunteerId &&
-      hasSectorSkillMatch(issue, v) &&
-      canTakeIssue(v.id, estimateIssueEffortHours(issue), volunteerLoads, volunteerCapacities)
+    (v) => {
+      if (!v.is_active || v.id === assignedVolunteerId) return false;
+      const volunteerSkills = (v.skills || []).map((s: string) => normalizeSkillTag(s));
+      return issue.sector === 'other' || issueSkills.some((skill) => volunteerSkills.includes(skill));
+    }
   );
 
   if (activeVolunteers.length === 0) {
     return null;
   }
 
-  return activeVolunteers
-    .map((volunteer) => ({
-      volunteer,
-      scored: scoreVolunteerForIssue(issue, volunteer, volunteerLoads, volunteerCapacities),
-    }))
-    .sort((a, b) => b.scored.score - a.scored.score)[0]?.volunteer || null;
+  // Pick least-loaded backup volunteer
+  return activeVolunteers.reduce((prev, curr) =>
+    (volunteerLoads[prev.id] || 0) <= (volunteerLoads[curr.id] || 0) ? prev : curr
+  );
 };
 
 // ============ TOOL: MATCH ============
@@ -535,117 +618,115 @@ const matchTool = async (state: AgentState): Promise<{ state: AgentState; confid
   const matched = [...state.issues];
   const assignments: any[] = [];
   const volunteerLoads: Record<string, number> = {};
-  const volunteerCapacities: Record<string, number> = {};
-  const geminiSuggestedByIssue: Record<number, string> = {};
 
-  // Initialize load/capacity trackers in effort-hours.
+  // Initialize loads
   state.volunteers.forEach((v) => {
     volunteerLoads[v.id] = 0;
-    volunteerCapacities[v.id] = getVolunteerCapacityHours(v);
   });
 
-  // 1) Ask Gemini for suggestions, then validate with hard capacity + skill rules.
+  // 1) Try Gemini-based assignment first
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   console.log('[Matching Tool] Gemini API key check:', !!geminiKey);
   
   if (geminiKey && geminiKey !== 'your-gemini-api-key-here') {
     try {
-      console.log('[Matching Tool] Calling Gemini assignment suggestion with', matched.length, 'issues');
+      console.log('[Matching Tool] Calling Gemini assignment with', matched.length, 'issues');
       const plan = await assignWithGemini(matched, state.volunteers, geminiKey);
-      console.log('[Matching Tool] Gemini returned', plan.length, 'suggestions');
-
+      console.log('[Matching Tool] Gemini returned', plan.length, 'assignments');
+      
       for (const item of plan) {
         const idx = item.issue_index;
-        if (idx < 0 || idx >= matched.length || !item.volunteer_id) {
+        if (idx < 0 || idx >= matched.length) {
+          console.warn('[Matching] Invalid index:', idx);
           continue;
         }
-        geminiSuggestedByIssue[idx] = item.volunteer_id;
+        if (matched[idx]?.status === 'assigned') {
+          console.log('[Matching] Already assigned at index:', idx);
+          continue;
+        }
+
+        const volunteer = state.volunteers.find((v) => v.id === item.volunteer_id && v.is_active);
+        if (!volunteer) {
+          console.warn('[Matching] Volunteer not found:', item.volunteer_id);
+          continue;
+        }
+
+        // Find backup volunteer (different from primary)
+        const backupVol = findBackupVolunteer(volunteer.id, matched[idx], state.volunteers, volunteerLoads);
+        const backupInfo = backupVol
+          ? ` | Backup: ${backupVol.name} (${backupVol.skills?.join(', ')})`
+          : ' | No backup available';
+
+        console.log('[Matching] Assigning issue', idx, 'to', volunteer.name);
+        matched[idx] = {
+          ...matched[idx],
+          assigned_volunteer_id: volunteer.id,
+          assignment_reason: `${item.assignment_reason || `Matched ${volunteer.name}`}${backupInfo}`,
+          status: 'assigned',
+        };
+
+        volunteerLoads[volunteer.id] = (volunteerLoads[volunteer.id] || 0) + 1;
+        assignments.push({ issue_index: idx, volunteer_id: volunteer.id });
       }
     } catch (err) {
-      console.error('[Matching] Gemini suggestion failed:', err);
+      console.error('[Matching] Gemini assignment failed:', err);
     }
   } else {
-    console.log('[Matching] No Gemini key, using deterministic assignment');
+    console.log('[Matching] No Gemini key, skipping Gemini assignment');
   }
 
-  // 2) Deterministic matcher with strict anti-overload checks.
-  console.log('[Matching] Starting deterministic matcher. Unassigned:', matched.filter((i) => i.status !== 'assigned').length);
+  // 2) Fallback matcher for remaining unassigned issues
+  console.log('[Matching] Starting fallback matcher. Unassigned:', matched.filter((i) => i.status !== 'assigned').length);
   const sortedIssues = matched
     .map((issue, idx) => ({ issue, idx }))
-    .sort((a, b) => {
-      const prioDiff = (b.issue.priority_score || 0) - (a.issue.priority_score || 0);
-      if (prioDiff !== 0) return prioDiff;
-      return (b.issue.affected_count || 0) - (a.issue.affected_count || 0);
-    });
+    .sort((a, b) => (b.issue.priority_score || 0) - (a.issue.priority_score || 0));
 
   for (const { issue, idx } of sortedIssues) {
     if (issue.status === 'assigned') {
+      console.log('[Matching] Issue', idx, 'already assigned, skipping');
       continue;
     }
 
-    const effortHours = estimateIssueEffortHours(issue);
+    const requiredSkills: string[] = Array.isArray(issue.required_skills) && issue.required_skills.length > 0
+      ? issue.required_skills
+      : [normalizeSkillTag(issue.sector)].filter(Boolean);
 
-    const candidates = state.volunteers
-      .filter((v) => v.is_active)
-      .filter((v) => canTakeIssue(v.id, effortHours, volunteerLoads, volunteerCapacities))
-      .map((volunteer) => ({
-        volunteer,
-        scored: scoreVolunteerForIssue(issue, volunteer, volunteerLoads, volunteerCapacities),
-      }))
-      .filter((entry) => Number.isFinite(entry.scored.score));
-
-    if (candidates.length === 0) {
-      console.log('[Matching] No valid candidate for issue', idx, '(sector:', issue.sector, ')');
-      continue;
-    }
-
-    const preferredId = geminiSuggestedByIssue[idx];
-    const preferredCandidate = preferredId
-      ? candidates.find((c) => c.volunteer.id === preferredId)
-      : undefined;
-
-    const ranked = [...candidates].sort((a, b) => {
-      if (b.scored.score !== a.scored.score) return b.scored.score - a.scored.score;
-      return (volunteerLoads[a.volunteer.id] || 0) - (volunteerLoads[b.volunteer.id] || 0);
+    const candidates = state.volunteers.filter((v) => {
+      if (!v.is_active) return false;
+      const volunteerSkills = (v.skills || []).map((s: string) => normalizeSkillTag(s));
+      const hasRequiredSkill = issue.sector === 'other' || requiredSkills.some((skill) => volunteerSkills.includes(skill));
+      const underCapacity = (volunteerLoads[v.id] || 0) < (v.availability_hours_per_week || 10) * 0.8;
+      return hasRequiredSkill && underCapacity;
     });
 
-    const best = preferredCandidate || ranked[0];
-    const selectedVolunteer = best.volunteer;
-    const selectedScore = best.scored;
+    if (candidates.length > 0) {
+      // Pick least-loaded
+      const best = candidates.reduce((prev, curr) =>
+        (volunteerLoads[prev.id] || 0) <= (volunteerLoads[curr.id] || 0) ? prev : curr
+      );
 
-    const backupVol = findBackupVolunteer(
-      selectedVolunteer.id,
-      issue,
-      state.volunteers,
-      volunteerLoads,
-      volunteerCapacities
-    );
-    const backupInfo = backupVol
-      ? ` | Backup: ${backupVol.name}`
-      : ' | No backup available';
+      // Find backup volunteer (different from primary)
+      const backupVol = findBackupVolunteer(best.id, issue, state.volunteers, volunteerLoads);
+      const backupInfo = backupVol
+        ? ` | Backup: ${backupVol.name}`
+        : ' | No backup available';
 
-    matched[idx] = {
-      ...matched[idx],
-      assigned_volunteer_id: selectedVolunteer.id,
-      assignment_reason: `Assigned to ${selectedVolunteer.name} (${selectedScore.reasons.join('; ')}) | effort ${effortHours.toFixed(1)}h${backupInfo}`,
-      status: 'assigned',
-    };
+      console.log('[Matching] Assigning issue', idx, 'to', best.name, '(fallback)');
+      if (idx >= 0) {
+        matched[idx] = {
+          ...matched[idx],
+          assigned_volunteer_id: best.id,
+          assignment_reason: `Matched: ${best.name} (${issue.sector} skill, load: ${volunteerLoads[best.id]}/${best.availability_hours_per_week}hrs)${backupInfo}`,
+          status: 'assigned',
+        };
+      }
 
-    volunteerLoads[selectedVolunteer.id] = (volunteerLoads[selectedVolunteer.id] || 0) + effortHours;
-    assignments.push({ issue_index: idx, volunteer_id: selectedVolunteer.id });
-  }
-
-  state.volunteers.forEach((volunteer) => {
-    const load = volunteerLoads[volunteer.id] || 0;
-    const cap = volunteerCapacities[volunteer.id] || 0;
-    if (volunteer.is_active && cap > 0 && load > cap + 0.001) {
-      state.alerts.push({
-        type: 'overload',
-        message: `${volunteer.name} exceeds capacity: ${load.toFixed(1)}h / ${cap.toFixed(1)}h`,
-        severity: 'warning',
-      });
+      volunteerLoads[best.id] = (volunteerLoads[best.id] || 0) + 1;
+      assignments.push({ issue_index: idx, volunteer_id: best.id });
+    } else {
+      console.log('[Matching] No candidates for issue', idx, '(sector:', issue.sector, ')');
     }
-  });
+  }
 
   console.log('[Matching] Complete:', matched.filter((i) => i.status === 'assigned').length, '/', matched.length, 'assigned');
 
@@ -663,66 +744,49 @@ const matchTool = async (state: AgentState): Promise<{ state: AgentState; confid
 const reallocateTool = async (state: AgentState): Promise<{ state: AgentState; confidence: number }> => {
   const reallocated = [...state.issues];
   const volunteerLoads: Record<string, number> = {};
-  const volunteerCapacities: Record<string, number> = {};
 
   state.volunteers.forEach((v) => {
-    volunteerCapacities[v.id] = getVolunteerCapacityHours(v);
-    volunteerLoads[v.id] = reallocated
-      .filter((i) => i.assigned_volunteer_id === v.id)
-      .reduce((sum, issue) => sum + estimateIssueEffortHours(issue), 0);
+    volunteerLoads[v.id] = reallocated.filter((i) => i.assigned_volunteer_id === v.id).length;
   });
 
-  const overloaded = state.volunteers
-    .filter((v) => v.is_active && volunteerLoads[v.id] > (volunteerCapacities[v.id] || 0))
-    .sort(
-      (a, b) =>
-        (volunteerLoads[b.id] - (volunteerCapacities[b.id] || 0)) -
-        (volunteerLoads[a.id] - (volunteerCapacities[a.id] || 0))
-    );
+  // Find overloaded volunteers
+  const overloaded = state.volunteers.filter(
+    (v) => v.is_active && volunteerLoads[v.id] > (v.availability_hours_per_week || 10) / 2
+  );
 
   for (const overvol of overloaded) {
+    // Find lowest-priority issues assigned to this volunteer
     const theirIssues = reallocated
       .map((i, idx) => ({ i, idx }))
       .filter(({ i }) => i.assigned_volunteer_id === overvol.id && i.status === 'assigned')
-      .sort((a, b) => {
-        const prioDiff = (a.i.priority_score || 0) - (b.i.priority_score || 0);
-        if (prioDiff !== 0) return prioDiff;
-        return estimateIssueEffortHours(b.i) - estimateIssueEffortHours(a.i);
-      });
+      .sort((a, b) => (a.i.priority_score || 0) - (b.i.priority_score || 0));
 
-    for (const { i: issue, idx: issueIdx } of theirIssues) {
-      if (volunteerLoads[overvol.id] <= (volunteerCapacities[overvol.id] || 0)) {
-        break;
+    for (const { i: issue, idx: issueIdx } of theirIssues.slice(0, Math.ceil(theirIssues.length / 2))) {
+      // Try reassign to another volunteer
+      const candidates = state.volunteers.filter(
+        (v) =>
+          v.id !== overvol.id &&
+          v.is_active &&
+          (v.skills?.includes(issue.sector) || true) &&
+          volunteerLoads[v.id] < (v.availability_hours_per_week || 10) / 2
+      );
+
+      if (candidates.length > 0) {
+        const best = candidates.reduce((prev, curr) =>
+          volunteerLoads[prev.id] <= volunteerLoads[curr.id] ? prev : curr
+        );
+
+        if (issueIdx >= 0) {
+          reallocated[issueIdx] = {
+            ...reallocated[issueIdx],
+            assigned_volunteer_id: best.id,
+            assignment_reason: `Reallocated from ${overvol.name} to ${best.name} (load balancing)`,
+          };
+        }
+
+        volunteerLoads[overvol.id]--;
+        volunteerLoads[best.id]++;
       }
-
-      const effortHours = estimateIssueEffortHours(issue);
-      const candidates = state.volunteers
-        .filter((v) => v.id !== overvol.id && v.is_active)
-        .filter((v) => hasSectorSkillMatch(issue, v))
-        .filter((v) => canTakeIssue(v.id, effortHours, volunteerLoads, volunteerCapacities))
-        .map((volunteer) => ({
-          volunteer,
-          scored: scoreVolunteerForIssue(issue, volunteer, volunteerLoads, volunteerCapacities),
-        }))
-        .filter((entry) => Number.isFinite(entry.scored.score))
-        .sort((a, b) => b.scored.score - a.scored.score);
-
-      if (candidates.length === 0) {
-        continue;
-      }
-
-      const best = candidates[0].volunteer;
-
-      if (issueIdx >= 0) {
-        reallocated[issueIdx] = {
-          ...reallocated[issueIdx],
-          assigned_volunteer_id: best.id,
-          assignment_reason: `Reallocated from ${overvol.name} to ${best.name} (capacity-safe balancing)`,
-        };
-      }
-
-      volunteerLoads[overvol.id] -= effortHours;
-      volunteerLoads[best.id] = (volunteerLoads[best.id] || 0) + effortHours;
     }
   }
 
@@ -731,7 +795,7 @@ const reallocateTool = async (state: AgentState): Promise<{ state: AgentState; c
       ...state,
       issues: reallocated,
     },
-    confidence: 0.85,
+    confidence: 0.8,
   };
 };
 
@@ -776,28 +840,16 @@ const reportTool = async (state: AgentState): Promise<{ state: AgentState; confi
 
 // ============ THINK FUNCTION (Agent Decision-Making) ============
 const think = (state: AgentState): string => {
-  // Decide which tool to run next based on state
-  if (state.currentStep === 'starting' || state.currentStep === 'ingestion') {
-    return 'extract';
-  }
-  if (state.issues.length === 0 && state.currentStep === 'extraction') {
-    return 'extract'; // Retry extraction
-  }
-  if (state.issues.some((i) => i.priority_score === null)) {
-    return 'score';
-  }
-  if (state.currentStep === 'scoring' || state.currentStep === 'gap_detection') {
-    return 'gap';
-  }
-  if (
-    state.issues.some((i) => i.status === 'unassigned') &&
-    state.volunteers.length > 0
-  ) {
-    return 'match';
-  }
-  if (state.alerts.some((a) => a.type === 'overload')) {
-    return 'reallocate';
-  }
+  if (state.currentStep === 'starting' || state.currentStep === 'ingestion') return 'extract';
+  if (state.currentStep === 'extraction') return 'score';
+  if (state.currentStep === 'scoring') return 'gap';
+  if (state.currentStep === 'gap_detection') return 'match';
+  if (state.currentStep === 'matching') return 'reallocate';
+  if (state.currentStep === 'reallocation') return 'report';
+
+  // Fallback safety
+  if (state.issues.length === 0) return 'extract';
+  if (state.issues.some((i) => i.priority_score === null)) return 'score';
   return 'report';
 };
 
@@ -915,23 +967,19 @@ export const runOrchestrator = async (
 
     // Add overload alerts if needed
     const volunteerLoads: Record<string, number> = {};
-    const volunteerCapacities: Record<string, number> = {};
     state.volunteers.forEach((v) => {
-      volunteerCapacities[v.id] = getVolunteerCapacityHours(v);
-      volunteerLoads[v.id] = state.issues
-        .filter((i) => i.assigned_volunteer_id === v.id)
-        .reduce((sum, issue) => sum + estimateIssueEffortHours(issue), 0);
+      volunteerLoads[v.id] = state.issues.filter((i) => i.assigned_volunteer_id === v.id).length;
     });
 
     for (const vol of state.volunteers) {
       if (
         vol.is_active &&
-        volunteerLoads[vol.id] > (volunteerCapacities[vol.id] || 0) + 0.001 &&
+        volunteerLoads[vol.id] > (vol.availability_hours_per_week || 10) / 2 &&
         !state.alerts.some((a) => a.message.includes(vol.name))
       ) {
         state.alerts.push({
           type: 'overload',
-          message: `${vol.name} has ${volunteerLoads[vol.id].toFixed(1)}h load (capacity: ${(volunteerCapacities[vol.id] || 0).toFixed(1)}h).`,
+          message: `${vol.name} has ${volunteerLoads[vol.id]} assignments (capacity: ${vol.availability_hours_per_week || 10}/week).`,
           severity: 'warning',
         });
       }

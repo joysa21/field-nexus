@@ -1,6 +1,8 @@
 import { toast } from "sonner";
 import * as pdfjsLib from 'pdfjs-dist';
 
+// Use backend for API calls - fallback to frontend API key if needed
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "";
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1/models";
 
@@ -81,28 +83,50 @@ export async function readFileAsText(file: File): Promise<string> {
 }
 
 /**
- * Process multiple files with Gemini API
- * Extracts, sorts, and structures unorganized data
+ * Extract text from multiple files (backend feature)
+ * Handles both PDF and text files
  */
-export async function processFilesWithGemini(
+export async function extractTextFromFiles(
   files: File[],
   onProgress?: (message: string) => void
-): Promise<ProcessedOutput> {
-  if (!GEMINI_API_KEY) {
-    throw new Error("Gemini API key not configured");
-  }
-
+): Promise<{ name: string; content: string }[]> {
   if (files.length === 0) {
     throw new Error("No files provided");
   }
 
   const fileContents: { name: string; content: string }[] = [];
 
-  // Read all files
   for (const file of files) {
-    onProgress?.(`Reading file: ${file.name}`);
+    onProgress?.(`Extracting text from: ${file.name}`);
     try {
-      const content = await readFileAsText(file);
+      let content = "";
+
+      // Backend-first extraction (if configured), then local fallback.
+      if (BACKEND_API_URL) {
+        try {
+          onProgress?.(`Calling backend extractor for: ${file.name}`);
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const response = await fetch(`${BACKEND_API_URL}/extract-text`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            content = (data?.text || "").toString();
+          }
+        } catch (backendError) {
+          console.warn(`Backend extraction failed for ${file.name}, falling back to local extractor`, backendError);
+        }
+      }
+
+      if (!content.trim()) {
+        onProgress?.(`Using local extractor for: ${file.name}`);
+        content = await readFileAsText(file);
+      }
+
       fileContents.push({
         name: file.name,
         content,
@@ -112,15 +136,26 @@ export async function processFilesWithGemini(
     }
   }
 
-  // Prepare prompt for Gemini
-  const filesList = fileContents
-    .map((f, i) => `FILE ${i + 1}: ${f.name}\n---\n${f.content}`)
-    .join("\n\n");
+  return fileContents;
+}
+
+/**
+ * Process extracted text with Gemini API
+ * Converts unstructured text into structured field report
+ */
+export async function structureTextWithGemini(
+  extractedText: string,
+  fileNames: string[],
+  onProgress?: (message: string) => void
+): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured. Please add VITE_GEMINI_API_KEY to .env");
+  }
 
   const prompt = `You are an expert field report analyzer for NGO coordination. Your task is to process unstructured field reports and extract actionable intelligence ready for volunteer assignment.
 
 INSTRUCTIONS:
-1. Read and extract ALL field reports from the provided files
+1. Read and extract ALL field reports from the provided text
 2. Identify and list each distinct issue/problem (one per line)
 3. For each issue, determine: sector, location, affected people count
 4. Format as a clean field report that agents can parse and process
@@ -145,19 +180,26 @@ RESOURCE GAPS:
 [List any mentioned gaps, skills needed, or constraints]
 
 FILES PROCESSED:
-${fileContents.map((f) => f.name).join(", ")}
+${fileNames.join(", ")}
 
 ---
 
-FILES PROVIDED:
-${filesList}
+EXTRACTED TEXT TO PROCESS:
+${extractedText}
 
 STRUCTURED FIELD REPORT:`;
 
-  onProgress?.("Sending to Gemini for processing...");
+  onProgress?.("Sending extracted text to Gemini for structuring...");
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    console.log("Gemini API Request:", {
+      url: url.replace(GEMINI_API_KEY, "***REDACTED***"),
+      timestamp: new Date().toISOString(),
+    });
+
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -179,19 +221,66 @@ STRUCTURED FIELD REPORT:`;
       }),
     });
 
+    console.log("Gemini API Response Status:", response.status, response.statusText);
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `Gemini API error: ${errorData?.error?.message || response.statusText}`
-      );
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { error: { message: response.statusText } };
+      }
+      
+      console.error("Gemini API Error Response:", errorData);
+      
+      const errorMessage = errorData?.error?.message || response.statusText;
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
+    console.log("Gemini API Success Response received");
+    
     const processedText =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "No content generated";
 
-    onProgress?.("Processing complete!");
+    onProgress?.("Structuring complete!");
+    return processedText;
+  } catch (e) {
+    const errorMsg = (e as Error).message;
+    console.error("Failed to structure text with Gemini:", errorMsg);
+    throw new Error(`Gemini API failed: ${errorMsg}`);
+  }
+}
+
+/**
+ * Process multiple files with Gemini API
+ * Extracts text first, then structures with Gemini
+ */
+export async function processFilesWithGemini(
+  files: File[],
+  onProgress?: (message: string) => void
+): Promise<ProcessedOutput> {
+  if (files.length === 0) {
+    throw new Error("No files provided");
+  }
+
+  try {
+    // Step 1: Extract text from all files
+    onProgress?.("Initializing file processing...");
+    const fileContents = await extractTextFromFiles(files, onProgress);
+
+    // Step 2: Combine extracted text
+    const combinedText = fileContents
+      .map((f, i) => `FILE ${i + 1}: ${f.name}\n---\n${f.content}`)
+      .join("\n\n");
+
+    // Step 3: Structure with Gemini
+    const processedText = await structureTextWithGemini(
+      combinedText,
+      fileContents.map((f) => f.name),
+      onProgress
+    );
 
     return {
       originalFiles: fileContents.map((f) => f.name),
@@ -199,49 +288,51 @@ STRUCTURED FIELD REPORT:`;
       summary: generateSummary(processedText),
     };
   } catch (e) {
-    // Fallback: Generate structured report from file contents
-    console.warn("Gemini processing failed, using structured report:", e);
+    // Fallback: Extract and structure locally
+    console.warn("Gemini processing failed, generating structured report locally:", e);
 
-    const fallbackReport = generateFallbackReport(fileContents);
+    try {
+      const fileContents = await extractTextFromFiles(files, onProgress);
+      const fallbackReport = generateFallbackReport(fileContents);
 
-    return {
-      originalFiles: fileContents.map((f) => f.name),
-      processedText: fallbackReport,
-      summary: generateSummary(fallbackReport),
-    };
+      return {
+        originalFiles: fileContents.map((f) => f.name),
+        processedText: fallbackReport,
+        summary: generateSummary(fallbackReport),
+      };
+    } catch (fallbackError) {
+      throw new Error(
+        `Failed to process files: ${(fallbackError as Error).message}`
+      );
+    }
   }
 }
 
 /**
  * Generate fallback structured report when Gemini API fails
+ * Returns empty template for user to fill in
  */
 function generateFallbackReport(
   fileContents: { name: string; content: string }[]
 ): string {
   return `FIELD REPORT SUMMARY:
-This is a structured field report generated from ${fileContents.length} uploaded file(s). The system has extracted and organized key issues for volunteer coordination.
+[Unable to process with Gemini API. Please structure the report manually using the extracted text below.]
 
 CRITICAL ISSUES:
-1. Water shortage in rural settlement - 250 families affected
-2. Lack of healthcare facilities in remote area - Medical supplies needed urgently
-3. School closure due to infrastructure damage - 150 children out of school
+[Add critical issues here]
 
 ALL REPORTED ISSUES:
-1. Contaminated water supply affecting 250 families. Location: Rural Settlement Area. Sector: water. Affected: 250 people.
-2. No medical clinic with basic medicines. Location: Remote Healthcare Zone. Sector: healthcare. Affected: 1200 people.
-3. School building damaged and non-functional. Location: District Education Hub. Sector: education. Affected: 150 people.
-4. Inadequate sanitation facilities in community. Location: Village Outskirts. Sector: sanitation. Affected: 300 people.
-5. Food shortage for vulnerable population. Location: Drought-Affected Region. Sector: food. Affected: 500 people.
+[Add numbered issues with Location, Sector, and Affected count]
 
 RESOURCE GAPS:
-- Need 2-3 water engineers for infrastructure repair
-- Require medical volunteer with pharmacy background
-- School repair requires construction skills and materials
-- Sanitation coordinator needed for latrine construction
-- Food distribution network for emergency relief
+[Add resource gaps and skill requirements]
 
 FILES PROCESSED:
-${fileContents.map((f) => `- ${f.name}`).join("\n")}`;
+${fileContents.map((f) => `- ${f.name}`).join("\n")}
+
+---
+EXTRACTED TEXT:
+${fileContents.map((f, i) => `\n=== FILE ${i + 1}: ${f.name} ===\n${f.content}`).join("\n\n")}`;
 }
 
 /**
@@ -283,3 +374,116 @@ ${output.originalFiles.map((f) => `- ${f}`).join("\n")}
 
 ${output.processedText}`;
 }
+
+/**
+ * Process raw text directly with Gemini
+ * For manual text input (copy-paste from reports)
+ */
+export async function processRawTextWithGemini(
+  rawText: string,
+  onProgress?: (message: string) => void
+): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured. Please add VITE_GEMINI_API_KEY to .env");
+  }
+
+  if (!rawText.trim()) {
+    throw new Error("No text provided");
+  }
+
+  const prompt = `You are an expert field report analyzer for NGO coordination. Your task is to process unstructured field reports and extract actionable intelligence ready for volunteer assignment.
+
+INSTRUCTIONS:
+1. Read and extract ALL issues from the provided text
+2. Identify and list each distinct issue/problem (one per line)
+3. For each issue, determine: sector, location, affected people count
+4. Format as a clean field report that agents can parse and process
+5. Prioritize critical issues (health, water, shelter, safety)
+6. Include any stakeholder information, resource requests, or constraints
+
+OUTPUT FORMAT (CRITICAL - must follow exactly):
+FIELD REPORT SUMMARY:
+[2-3 sentence executive summary]
+
+CRITICAL ISSUES:
+[List most urgent issues with sector and location]
+
+ALL REPORTED ISSUES:
+1. [Issue summary]. Location: [place]. Sector: [water/healthcare/education/shelter/safety/sanitation/food/logistics/other]. Affected: [number] people.
+2. [Issue summary]. Location: [place]. Sector: [sector]. Affected: [number] people.
+[Continue for all issues]
+
+RESOURCE GAPS:
+[List any mentioned gaps, skills needed, or constraints]
+
+---
+
+TEXT TO PROCESS:
+${rawText}
+
+STRUCTURED FIELD REPORT:`;
+
+  onProgress?.("Sending text to Gemini for structuring...");
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    console.log("Gemini API Request:", {
+      url: url.replace(GEMINI_API_KEY, "***REDACTED***"),
+      timestamp: new Date().toISOString(),
+    });
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      }),
+    });
+
+    console.log("Gemini API Response Status:", response.status, response.statusText);
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { error: { message: response.statusText } };
+      }
+      
+      console.error("Gemini API Error Response:", errorData);
+      
+      const errorMessage = errorData?.error?.message || response.statusText;
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log("Gemini API Success Response received");
+    
+    const processedText =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "No content generated";
+
+    onProgress?.("Text structuring complete!");
+    return processedText;
+  } catch (e) {
+    const errorMsg = (e as Error).message;
+    console.error("Failed to structure text with Gemini:", errorMsg);
+    throw new Error(`Gemini API failed: ${errorMsg}`);
+  }
+}
+

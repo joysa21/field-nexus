@@ -131,6 +131,7 @@ export type Database = {
           contact_info: string | null;
           contact_number: string | null;
           ngo_type: string | null;
+          sponsorship_domains: string[] | null;
           verification_status: string | null;
           created_at: string | null;
           updated_at: string | null;
@@ -146,6 +147,7 @@ export type Database = {
           contact_info?: string | null;
           contact_number?: string | null;
           ngo_type?: string | null;
+          sponsorship_domains?: string[] | null;
           verification_status?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
@@ -161,6 +163,7 @@ export type Database = {
           contact_info?: string | null;
           contact_number?: string | null;
           ngo_type?: string | null;
+          sponsorship_domains?: string[] | null;
           verification_status?: string | null;
           created_at?: string | null;
           updated_at?: string | null;

@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   Select,
@@ -35,9 +36,20 @@ const ngoRegisterSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
+// Sponsor Registration Schema
+const sponsorRegisterSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  location: z.string().min(2, "Location is required"),
+  contactNumber: z.string().regex(/^\d{10}$/, "Contact number must be 10 digits"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  sponsorshipDomains: z.array(z.string()).min(1, "Please select at least one sponsorship domain"),
+});
+
 type IndividualFormValues = z.infer<typeof individualRegisterSchema>;
 type NGOFormValues = z.infer<typeof ngoRegisterSchema>;
-type FormValues = IndividualFormValues | NGOFormValues;
+type SponsorFormValues = z.infer<typeof sponsorRegisterSchema>;
+type FormValues = IndividualFormValues | NGOFormValues | SponsorFormValues;
 
 interface RegisterFormProps {
   userType: "individual" | "ngo" | "sponsor";
@@ -55,6 +67,17 @@ const NGO_TYPES = [
   { label: "Other", value: "other" },
 ];
 
+const SPONSORSHIP_DOMAINS = [
+  "Education",
+  "Healthcare",
+  "Food & Nutrition",
+  "Water & Sanitation",
+  "Women Empowerment",
+  "Livelihood",
+  "Disaster Relief",
+  "Environment",
+];
+
 export default function RegisterForm({ userType, onSuccess }: RegisterFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -62,43 +85,63 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
 
   const schema = userType === "ngo"
     ? ngoRegisterSchema
-    : individualRegisterSchema;
+    : userType === "sponsor"
+      ? sponsorRegisterSchema
+      : individualRegisterSchema;
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: userType === "ngo"
       ? {
-        ngoName: "",
-        location: "",
-        ngoType: "",
-        email: "",
-        password: "",
-      }
-      : {
-        name: "",
-        location: "",
-        contactNumber: "",
-        email: "",
-        password: "",
-      },
-  });
-
-  useEffect(() => {
-    form.reset(
-      userType === "ngo"
-        ? {
           ngoName: "",
           location: "",
           ngoType: "",
           email: "",
           password: "",
         }
+      : userType === "sponsor"
+        ? {
+            name: "",
+            location: "",
+            contactNumber: "",
+            email: "",
+            password: "",
+            sponsorshipDomains: [],
+          }
         : {
-          name: "",
-          location: "",
-          contactNumber: "",
-          email: "",
-          password: "",
-        },
+            name: "",
+            location: "",
+            contactNumber: "",
+            email: "",
+            password: "",
+          },
+  });
+
+  useEffect(() => {
+    form.reset(
+      userType === "ngo"
+        ? {
+            ngoName: "",
+            location: "",
+            ngoType: "",
+            email: "",
+            password: "",
+          }
+        : userType === "sponsor"
+          ? {
+              name: "",
+              location: "",
+              contactNumber: "",
+              email: "",
+              password: "",
+              sponsorshipDomains: [],
+            }
+        : {
+            name: "",
+            location: "",
+            contactNumber: "",
+            email: "",
+            password: "",
+          },
     );
   }, [userType, form]);
 
@@ -108,7 +151,7 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
 
       const displayName = userType === "ngo"
         ? (values as NGOFormValues).ngoName
-        : (values as IndividualFormValues).name;
+        : (values as IndividualFormValues | SponsorFormValues).name;
 
       const result = await register({
         email: values.email,
@@ -116,12 +159,13 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
         userType,
         name: userType === "ngo"
           ? (values as NGOFormValues).ngoName
-          : (values as IndividualFormValues).name,
+          : (values as IndividualFormValues | SponsorFormValues).name,
         location: values.location,
         contactNumber: userType === "ngo"
           ? undefined
-          : (values as IndividualFormValues).contactNumber,
+          : (values as IndividualFormValues | SponsorFormValues).contactNumber,
         ngoType: userType === "ngo" ? (values as NGOFormValues).ngoType : undefined,
+        sponsorshipDomains: userType === "sponsor" ? (values as SponsorFormValues).sponsorshipDomains : undefined,
       });
 
       if (result.error) {
@@ -149,7 +193,7 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
         {userType !== "ngo" ? (
           <>
-            {/* Individual Form */}
+            {/* Individual/Sponsor Form */}
             <FormField
               control={form.control}
               name="name"
@@ -246,6 +290,41 @@ export default function RegisterForm({ userType, onSuccess }: RegisterFormProps)
                 </FormItem>
               )}
             />
+
+            {userType === "sponsor" ? (
+              <FormField
+                control={form.control}
+                name="sponsorshipDomains"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Domains of sponsorship</FormLabel>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border p-3">
+                      {SPONSORSHIP_DOMAINS.map((domain) => {
+                        const checked = field.value?.includes(domain);
+                        return (
+                          <label key={domain} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(nextChecked) => {
+                                const current = field.value || [];
+                                if (nextChecked) {
+                                  field.onChange([...current, domain]);
+                                  return;
+                                }
+                                field.onChange(current.filter((value) => value !== domain));
+                              }}
+                              disabled={isLoading}
+                            />
+                            <span>{domain}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
           </>
         ) : (
           <>

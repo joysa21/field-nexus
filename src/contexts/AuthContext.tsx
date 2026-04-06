@@ -19,6 +19,7 @@ export interface RegisterInput {
   location?: string;
   contactNumber?: string;
   ngoType?: string;
+  sponsorshipDomains?: string[];
 }
 
 interface AuthResult {
@@ -30,7 +31,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, userType: UserType) => Promise<AuthResult>;
+  login: (email: string, password: string, userType: UserType, sponsorshipDomains?: string[]) => Promise<AuthResult>;
   logout: () => Promise<void>;
   register: (input: RegisterInput) => Promise<AuthResult>;
 }
@@ -76,6 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       location?: string;
       contact_number?: string;
       ngo_type?: string;
+      sponsorship_domains?: string[];
     } = {},
   ) => {
     const payload = {
@@ -87,6 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       location: details.location ?? null,
       contact_number: details.contact_number ?? null,
       ngo_type: details.ngo_type ?? null,
+      sponsorship_domains: details.sponsorship_domains ?? [],
       updated_at: new Date().toISOString(),
     };
 
@@ -169,7 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const login = async (email: string, password: string, userType: UserType): Promise<AuthResult> => {
+  const login = async (email: string, password: string, userType: UserType, sponsorshipDomains?: string[]): Promise<AuthResult> => {
     try {
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
@@ -184,7 +187,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(mapToAppUser(authUser, { user_type: userType }));
 
       void Promise.allSettled([
-        upsertProfile(authUser, userType),
+        upsertProfile(authUser, userType, {
+          sponsorship_domains: userType === "sponsor" ? (sponsorshipDomains ?? []) : undefined,
+        }),
         trackAuthEvent("login", authUser.id, authUser.email ?? email),
         withTimeout(getProfile(authUser.id), AUTH_INIT_TIMEOUT_MS, "getProfile")
           .then((profile) => {
@@ -216,7 +221,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (input: RegisterInput): Promise<AuthResult> => {
-    const { email, password, userType, name, location, contactNumber, ngoType } = input;
+    const { email, password, userType, name, location, contactNumber, ngoType, sponsorshipDomains } = input;
     try {
       const { data, error } = await withTimeout(
         supabase.auth.signUp({
@@ -241,6 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         location,
         contact_number: contactNumber,
         ngo_type: ngoType,
+        sponsorship_domains: userType === "sponsor" ? (sponsorshipDomains ?? []) : undefined,
       });
 
       if (data.session) {

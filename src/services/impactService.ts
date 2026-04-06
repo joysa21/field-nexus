@@ -441,11 +441,27 @@ function getNgoMatchSummary(ngoProfile: any) {
   return pieces;
 }
 
+function isEmailLike(value: string | null | undefined): boolean {
+  return /.+@.+\..+/.test(String(value || "").trim());
+}
+
+function toSafeSponsorName(profile: any): string {
+  const fullName = String(profile?.full_name || "").trim();
+  if (fullName) return fullName;
+
+  const displayName = String(profile?.display_name || "").trim();
+  if (displayName && !isEmailLike(displayName)) return displayName;
+
+  return "Sponsor";
+}
+
 function mapProfileToSponsorEntry(profile: any): SponsorDirectoryItem {
+  const safeName = toSafeSponsorName(profile);
+
   return {
     id: profile.id,
-    display_name: profile.display_name || profile.full_name || profile.email || "Sponsor",
-    organization: profile.display_name || profile.full_name || "Sponsor Organization",
+    display_name: safeName,
+    organization: safeName === "Sponsor" ? "Sponsor Organization" : safeName,
     description: profile.contact_info || profile.email || "Potential sponsor registered on the portal.",
     location: profile.location || "Unknown",
     email: profile.email || profile.contact_info || "",
